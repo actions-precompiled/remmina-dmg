@@ -9,22 +9,6 @@ import (
 	"github.com/actions-precompiled/foundation"
 )
 
-const launcherScript = `#!/bin/bash
-set -euo pipefail
-DIR="$(cd "$(dirname "$0")" && pwd)"
-RES="$DIR/../Resources"
-export XDG_DATA_DIRS="$RES/share:${XDG_DATA_DIRS:-/usr/share}"
-export GSETTINGS_SCHEMA_DIR="$RES/share/glib-2.0/schemas"
-export GDK_PIXBUF_MODULEDIR="$RES/lib/gdk-pixbuf-2.0/2.10.0/loaders"
-export GTK_DATA_PREFIX="$RES"
-export GTK_EXE_PREFIX="$RES"
-export GTK_PATH="$RES"
-export GI_TYPELIB_PATH="$RES/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
-export GIO_MODULE_DIR="$RES/lib/gio/modules"
-export PANGO_LIBDIR="$RES/lib"
-exec "$RES/bin/remmina" "$@"
-`
-
 func assembleApp(ctx context.Context, deps foundation.Deps, prefix, appDir, brew, version string) error {
 	macos := filepath.Join(appDir, "Contents", "MacOS")
 	res := filepath.Join(appDir, "Contents", "Resources")
@@ -36,7 +20,7 @@ func assembleApp(ctx context.Context, deps foundation.Deps, prefix, appDir, brew
 		return fmt.Errorf("copy prefix into app: %w", err)
 	}
 
-	if err := deps.FS.WriteFile(filepath.Join(macos, "Remmina"), []byte(launcherScript), 0o755); err != nil {
+	if err := compileLauncher(ctx, deps, filepath.Join(macos, "Remmina")); err != nil {
 		return err
 	}
 	plist := fmt.Sprintf(infoPlist, version, version)
@@ -57,13 +41,7 @@ func assembleApp(ctx context.Context, deps foundation.Deps, prefix, appDir, brew
 		return err
 	}
 
-	if _, err := deps.Runner.Output(ctx, "which", "codesign"); err == nil {
-		deps.Logf("codesign --sign - (ad-hoc, unsigned like rterm)")
-		if err := deps.Runner.Run(ctx, "codesign", "--force", "--deep", "--sign", "-", appDir); err != nil {
-			return fmt.Errorf("codesign: %w", err)
-		}
-	}
-	return nil
+	return signApp(ctx, deps, appDir)
 }
 
 const remminaAppPNG = "org.remmina.Remmina.png"

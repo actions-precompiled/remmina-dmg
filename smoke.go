@@ -84,6 +84,12 @@ func smokeOne(ctx context.Context, deps foundation.Deps, artifact string) error 
 	if err := checkNoHomebrewLinks(ctx, deps, rdp); err != nil {
 		return err
 	}
+	if err := verifyAdHoc(ctx, deps, launcher); err != nil {
+		return err
+	}
+	if err := verifyAdHoc(ctx, deps, bin); err != nil {
+		return err
+	}
 
 	env := foundation.CleanSmokeEnv(deps.Env.Environ())
 	out, err := foundation.OutputWithEnv(ctx, deps, env, launcher, "--version")
@@ -103,6 +109,14 @@ func smokeOne(ctx context.Context, deps foundation.Deps, artifact string) error 
 		deps.Logf("remmina --version: %s", firstLine(out))
 	}
 	deps.Logf("✓ Smoke test passed: %s", filepath.Base(artifact))
+	return nil
+}
+
+func verifyAdHoc(ctx context.Context, deps foundation.Deps, path string) error {
+	out, err := deps.Runner.Output(ctx, "codesign", "--verify", "--verbose=2", path)
+	if err != nil {
+		return fmt.Errorf("codesign --verify %s: %w\n%s", filepath.Base(path), err, out)
+	}
 	return nil
 }
 

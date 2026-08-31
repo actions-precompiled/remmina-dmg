@@ -1,0 +1,88 @@
+#include <limits.h>
+#include <mach-o/dyld.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+static int
+join(char *out, size_t n, const char *a, const char *b)
+{
+	int w = snprintf(out, n, "%s/%s", a, b);
+	return w < 0 || (size_t)w >= n;
+}
+
+static void
+set_pref(const char *key, const char *dir, const char *rel)
+{
+	char val[PATH_MAX];
+	if (join(val, sizeof(val), dir, rel)) {
+		return;
+	}
+	setenv(key, val, 1);
+}
+
+static void
+prepend_path(const char *key, const char *dir, const char *rel)
+{
+	char val[PATH_MAX];
+	if (join(val, sizeof(val), dir, rel)) {
+		return;
+	}
+	const char *old = getenv(key);
+	if (old == NULL || old[0] == '\0') {
+		setenv(key, val, 1);
+		return;
+	}
+	char both[PATH_MAX * 2];
+	if (snprintf(both, sizeof(both), "%s:%s", val, old) < 0) {
+		return;
+	}
+	setenv(key, both, 1);
+}
+
+int
+main(int argc, char **argv)
+{
+	char exe[PATH_MAX];
+	uint32_t n = sizeof(exe);
+	if (_NSGetExecutablePath(exe, &n) != 0) {
+		return 127;
+	}
+	char real[PATH_MAX];
+	if (realpath(exe, real) == NULL) {
+		return 127;
+	}
+	char *slash = strrchr(real, '/');
+	if (slash == NULL) {
+		return 127;
+	}
+	*slash = '\0';
+
+	char res[PATH_MAX];
+	if (join(res, sizeof(res), real, "../Resources")) {
+		return 127;
+	}
+	char resreal[PATH_MAX];
+	if (realpath(res, resreal) == NULL) {
+		return 127;
+	}
+
+	prepend_path("XDG_DATA_DIRS", resreal, "share");
+	set_pref("GSETTINGS_SCHEMA_DIR", resreal, "share/glib-2.0/schemas");
+	set_pref("GDK_PIXBUF_MODULEDIR", resreal, "lib/gdk-pixbuf-2.0/2.10.0/loaders");
+	setenv("GTK_DATA_PREFIX", resreal, 1);
+	setenv("GTK_EXE_PREFIX", resreal, 1);
+	setenv("GTK_PATH", resreal, 1);
+	prepend_path("GI_TYPELIB_PATH", resreal, "lib/girepository-1.0");
+	set_pref("GIO_MODULE_DIR", resreal, "lib/gio/modules");
+	set_pref("PANGO_LIBDIR", resreal, "lib");
+
+	char bin[PATH_MAX];
+	if (join(bin, sizeof(bin), resreal, "bin/remmina")) {
+		return 127;
+	}
+	execv(bin, argv);
+	perror(bin);
+	return 127;
+}

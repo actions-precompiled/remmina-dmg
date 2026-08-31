@@ -20,11 +20,8 @@ func TestInfoPlistAndLauncher(t *testing.T) {
 			t.Fatalf("plist missing %q", want)
 		}
 	}
-	if !strings.Contains(launcherScript, `exec "$RES/bin/remmina"`) {
-		t.Fatal("launcher must exec bundled remmina")
-	}
-	if strings.Contains(launcherScript, "DYLD_LIBRARY_PATH") {
-		t.Fatal("do not rely on DYLD_LIBRARY_PATH")
+	if !strings.Contains(plist, "CFBundleIconFile") {
+		t.Fatal("plist must name the app icon")
 	}
 }
 
