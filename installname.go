@@ -52,9 +52,10 @@ func rewriteInstallNames(ctx context.Context, deps foundation.Deps, file, prefix
 		return fmt.Errorf("otool -L %s: %w", filepath.Base(file), err)
 	}
 	id, depsList := parseOtoolL(out)
-	if name := filepath.Base(id); bundled[name] {
+	if id != "" {
+		name := filepath.Base(id)
 		want := prefix + name
-		if id != "" && id != want {
+		if id != want && (bundled[name] || isForeignInstallName(id)) {
 			deps.Logf("install_name_tool -id %s %s", want, filepath.Base(file))
 			if err := deps.Runner.Run(ctx, "install_name_tool", "-id", want, file); err != nil {
 				return fmt.Errorf("install_name_tool -id %s: %w", filepath.Base(file), err)
@@ -103,6 +104,13 @@ func parseOtoolL(out string) (id string, deps []string) {
 		deps = append(deps, s)
 	}
 	return id, deps
+}
+
+func isForeignInstallName(s string) bool {
+	return strings.HasPrefix(s, "@rpath/") ||
+		strings.Contains(s, "/opt/homebrew/") ||
+		strings.Contains(s, "/usr/local/opt/") ||
+		strings.Contains(s, "/usr/local/Cellar/")
 }
 
 func libHasBadSiblingPath(otoolOut string) bool {

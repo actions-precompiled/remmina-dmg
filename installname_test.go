@@ -18,6 +18,16 @@ func TestParseOtoolL(t *testing.T) {
 	}
 }
 
+func TestIsForeignInstallName(t *testing.T) {
+	t.Parallel()
+	if !isForeignInstallName("/opt/homebrew/opt/librsvg/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader_svg.dylib") {
+		t.Fatal("homebrew id")
+	}
+	if isForeignInstallName("@loader_path/libpixbufloader_svg.dylib") {
+		t.Fatal("loader_path is local")
+	}
+}
+
 func TestLibHasBadSiblingPath(t *testing.T) {
 	t.Parallel()
 	bad := `libssl.3.dylib:
