@@ -46,7 +46,7 @@ endif()
 		t.Fatal(err)
 	}
 	files := map[string]string{
-		"CMakeLists.txt":           "  \"remmina_utils.c\"\n  \"remmina_utils.h\"\n  \"remmina_widget_pool.c\"\n",
+		"CMakeLists.txt":           "  \"remmina_utils.c\"\n  \"remmina_utils.h\"\n  \"remmina_widget_pool.c\"\ntarget_link_libraries(remmina ${GTK_LIBRARIES} -rdynamic)\n",
 		"remmina.c":                "#include \"remmina_public.h\"\nfoo\ngtk_icon_theme_append_search_path(gtk_icon_theme_get_default(),\n  REMMINA_RUNTIME_DATADIR G_DIR_SEPARATOR_S \"icons\");\nbar\nbindtextdomain(GETTEXT_PACKAGE, REMMINA_RUNTIME_LOCALEDIR);\n",
 		"remmina_plugin_manager.c": "#include \"remmina_utils.h\"\ng_ptr_array_add(plugin_dirs, REMMINA_RUNTIME_PLUGINDIR);\n",
 		"remmina_public.c":         "#include \"config.h\"\ngchar *ui_path = g_strconcat(REMMINA_RUNTIME_UIDIR, G_DIR_SEPARATOR_S, filename, NULL);\n",
@@ -84,6 +84,13 @@ endif()
 	}
 	if !strings.Contains(string(rootGot), `set(CMAKE_INSTALL_RPATH "@loader_path/../lib")`) {
 		t.Fatalf("root CMakeLists RPATH not patched:\n%s", rootGot)
+	}
+	srcCmake, err := os.ReadFile(filepath.Join(srcDir, "CMakeLists.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(srcCmake), "CoreFoundation") {
+		t.Fatalf("src CMakeLists missing CoreFoundation:\n%s", srcCmake)
 	}
 	if err := injectBundleSources(deps, root); err != nil {
 		t.Fatal(err)

@@ -1,6 +1,25 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"strings"
+	"testing"
+)
+
+func TestLauncherLeavesAdwaitaUnlocked(t *testing.T) {
+	t.Parallel()
+	data, err := os.ReadFile("launcher.c")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(data)
+	if strings.Contains(s, "Adwaita:dark") {
+		t.Fatal("GTK_THEME must not lock Adwaita:dark")
+	}
+	if !strings.Contains(s, `setenv("GTK_THEME", "Adwaita", 1)`) {
+		t.Fatal("expected GTK_THEME=Adwaita")
+	}
+}
 
 func TestIsMachOMagic(t *testing.T) {
 	t.Parallel()

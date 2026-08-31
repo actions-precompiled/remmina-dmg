@@ -3,6 +3,63 @@
 
 #ifdef __APPLE__
 
+#include <CoreFoundation/CoreFoundation.h>
+
+static char macos_observer;
+
+static gboolean
+macos_prefers_dark(void)
+{
+	CFPropertyListRef appearance;
+	gboolean dark = FALSE;
+
+	CFPreferencesSynchronize(kCFPreferencesAnyApplication,
+				 kCFPreferencesCurrentUser,
+				 kCFPreferencesAnyHost);
+	appearance = CFPreferencesCopyValue(CFSTR("AppleInterfaceStyle"),
+					    kCFPreferencesAnyApplication,
+					    kCFPreferencesCurrentUser,
+					    kCFPreferencesAnyHost);
+	if (appearance != NULL) {
+		if (CFGetTypeID(appearance) == CFStringGetTypeID() &&
+		    CFStringCompare((CFStringRef)appearance, CFSTR("Dark"), 0) == kCFCompareEqualTo) {
+			dark = TRUE;
+		}
+		CFRelease(appearance);
+	}
+	return dark;
+}
+
+static gboolean
+macos_apply_appearance(gpointer unused)
+{
+	GtkSettings *settings;
+
+	(void)unused;
+	settings = gtk_settings_get_default();
+	if (settings != NULL) {
+		g_object_set(settings,
+			     "gtk-application-prefer-dark-theme", macos_prefers_dark(),
+			     NULL);
+	}
+	return G_SOURCE_REMOVE;
+}
+
+static void
+macos_appearance_changed(CFNotificationCenterRef center, void *observer,
+			 CFStringRef name, const void *object,
+			 CFDictionaryRef info)
+{
+	(void)center;
+	(void)observer;
+	(void)name;
+	(void)object;
+	(void)info;
+	/* The notification can arrive before AppleInterfaceStyle is visible. */
+	g_idle_add(macos_apply_appearance, NULL);
+	g_timeout_add(150, macos_apply_appearance, NULL);
+}
+
 void
 remmina_macos_init(void)
 {
@@ -22,6 +79,12 @@ remmina_macos_init(void)
 						  GTK_STYLE_PROVIDER(provider),
 						  GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 	g_object_unref(provider);
+
+	macos_apply_appearance(NULL);
+	CFNotificationCenterAddObserver(CFNotificationCenterGetDistributedCenter(),
+					&macos_observer, macos_appearance_changed,
+					CFSTR("AppleInterfaceThemeChangedNotification"),
+					NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
 }
 
 void

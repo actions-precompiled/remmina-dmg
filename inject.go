@@ -54,6 +54,12 @@ endif()`,
 	); err != nil {
 		return err
 	}
+	if err := replaceOnce(deps, cmake,
+		"target_link_libraries(remmina ${GTK_LIBRARIES} -rdynamic)\n",
+		"target_link_libraries(remmina ${GTK_LIBRARIES} -rdynamic)\nif(APPLE)\n  target_link_libraries(remmina \"-framework CoreFoundation\")\nendif()\n",
+	); err != nil {
+		return err
+	}
 
 	replacements := []struct {
 		file, old, neu string
