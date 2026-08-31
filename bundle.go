@@ -40,7 +40,10 @@ func assembleApp(ctx context.Context, deps foundation.Deps, prefix, appDir, brew
 	if err := updateIconCaches(ctx, deps, res); err != nil {
 		return err
 	}
-	if err := bundleDylibs(ctx, deps, res); err != nil {
+	if err := writeGTKSettings(deps, res); err != nil {
+		return err
+	}
+	if err := bundleDylibs(ctx, deps, res, brew); err != nil {
 		return err
 	}
 	if err := writePixbufCache(ctx, deps, res); err != nil {
@@ -148,7 +151,7 @@ func mergeTree(ctx context.Context, deps foundation.Deps, src, dest string) erro
 	return nil
 }
 
-func bundleDylibs(ctx context.Context, deps foundation.Deps, res string) error {
+func bundleDylibs(ctx context.Context, deps foundation.Deps, res, brew string) error {
 	lib := filepath.Join(res, "lib")
 	if err := deps.FS.MkdirAll(lib, 0o755); err != nil {
 		return err
@@ -165,6 +168,12 @@ func bundleDylibs(ctx context.Context, deps foundation.Deps, res string) error {
 		if err != nil {
 			return fmt.Errorf("%w: %s: %w", ErrDylibbundler, filepath.Base(bin), err)
 		}
+	}
+	if err := vendorMissingRpathLibs(ctx, deps, res, brew); err != nil {
+		return err
+	}
+	if err := fixLoaderInstallNames(ctx, deps, res); err != nil {
+		return err
 	}
 	// dylibbundler reuses -p when rewriting dest libs. Plugin runs use
 	// @loader_path/../.. and poison libssl→libcrypto into Contents/.
@@ -201,9 +210,11 @@ func globMachO(deps foundation.Deps, root string) []string {
 		}
 	}
 	// gdk-pixbuf loaders live one more directory down
-	nested, err := deps.FS.Glob(filepath.Join(root, "*", "*", "loaders", "*.so"))
-	if err == nil {
-		out = append(out, nested...)
+	for _, pat := range []string{"*.so", "*.dylib"} {
+		nested, err := deps.FS.Glob(filepath.Join(root, "*", "*", "loaders", pat))
+		if err == nil {
+			out = append(out, nested...)
+		}
 	}
 	return out
 }
@@ -236,6 +247,11 @@ func remminaSymbolicIconRel() string {
 		"org.remmina.Remmina-fullscreen-symbolic.svg")
 }
 
+func remminaVNCIconRel() string {
+	return filepath.Join("share", "icons", "hicolor", "scalable", "emblems",
+		"org.remmina.Remmina-vnc-symbolic.svg")
+}
+
 func pixbufLoadersDir(res string) string {
 	return filepath.Join(res, "lib", "gdk-pixbuf-2.0", "2.10.0", "loaders")
 }
@@ -250,11 +266,24 @@ func isSVGLoader(name string) bool {
 }
 
 func checkRemminaIcons(deps foundation.Deps, res string) error {
-	p := filepath.Join(res, remminaSymbolicIconRel())
-	if _, err := deps.FS.Stat(p); err != nil {
-		return fmt.Errorf("%w: %s", ErrIconMissing, remminaSymbolicIconRel())
+	for _, rel := range []string{remminaSymbolicIconRel(), remminaVNCIconRel()} {
+		if _, err := deps.FS.Stat(filepath.Join(res, rel)); err != nil {
+			return fmt.Errorf("%w: %s", ErrIconMissing, rel)
+		}
 	}
 	return nil
+}
+
+func writeGTKSettings(deps foundation.Deps, res string) error {
+	dir := filepath.Join(res, "etc", "gtk-3.0")
+	if err := deps.FS.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	const ini = `[Settings]
+gtk-icon-theme-name=Adwaita
+gtk-theme-name=Adwaita
+`
+	return deps.FS.WriteFile(filepath.Join(dir, "settings.ini"), []byte(ini), 0o644)
 }
 
 func updateIconCaches(ctx context.Context, deps foundation.Deps, res string) error {
@@ -295,6 +324,9 @@ func writePixbufCache(ctx context.Context, deps foundation.Deps, res string) err
 		return fmt.Errorf("%w: gdk-pixbuf-query-loaders: %w", ErrPixbufCache, err)
 	}
 	rewritten := rewritePixbufCacheText(out, dir, loaders)
+	if !strings.Contains(strings.ToLower(rewritten), "svg") {
+		return fmt.Errorf("%w: SVG loader did not register", ErrPixbufCache)
+	}
 	if !strings.Contains(rewritten, pixbufLoaderToken) {
 		return fmt.Errorf("%w: token missing", ErrPixbufCache)
 	}
@@ -312,6 +344,116 @@ func rewritePixbufCacheText(src, loadersDir string, loaders []string) string {
 		s = strings.ReplaceAll(s, p, pixbufLoaderToken+"/"+filepath.Base(p))
 	}
 	return s
+}
+
+func rpathDepName(dep string) string {
+	const p = "@rpath/"
+	if strings.HasPrefix(dep, p) {
+		return strings.TrimPrefix(dep, p)
+	}
+	return ""
+}
+
+func findBrewDylib(deps foundation.Deps, brew, name string) string {
+	for _, p := range []string{
+		filepath.Join(brew, "lib", name),
+		filepath.Join(brew, "opt", "librsvg", "lib", name),
+	} {
+		if _, err := deps.FS.Stat(p); err == nil {
+			return p
+		}
+	}
+	matches, err := deps.FS.Glob(filepath.Join(brew, "opt", "*", "lib", name))
+	if err == nil && len(matches) > 0 {
+		return matches[0]
+	}
+	return ""
+}
+
+func vendorMissingRpathLibs(ctx context.Context, deps foundation.Deps, res, brew string) error {
+	lib := filepath.Join(res, "lib")
+	for i := 0; i < 8; i++ {
+		bundled, err := bundledLibNames(deps, lib)
+		if err != nil {
+			return err
+		}
+		needed := map[string]bool{}
+		for _, f := range rpathScanFiles(deps, res) {
+			out, err := deps.Runner.Output(ctx, "otool", "-L", f)
+			if err != nil {
+				return fmt.Errorf("otool -L %s: %w", filepath.Base(f), err)
+			}
+			_, depsList := parseOtoolL(out)
+			for _, dep := range depsList {
+				name := rpathDepName(dep)
+				if name == "" || bundled[name] {
+					continue
+				}
+				needed[name] = true
+			}
+		}
+		if len(needed) == 0 {
+			return nil
+		}
+		for name := range needed {
+			src := findBrewDylib(deps, brew, name)
+			if src == "" {
+				return fmt.Errorf("%w: %s", ErrRpathLib, name)
+			}
+			dest := filepath.Join(lib, name)
+			deps.Logf("vendor @rpath %s from %s", name, src)
+			if err := deps.Runner.Run(ctx, "cp", src, dest); err != nil {
+				return fmt.Errorf("copy %s: %w", name, err)
+			}
+			_ = deps.Runner.Run(ctx, "chmod", "u+w", dest)
+			args := dylibbundlerArgs(dest, lib, "@loader_path/")
+			if err := deps.Runner.Run(ctx, "dylibbundler", args...); err != nil {
+				return fmt.Errorf("%w: %s: %w", ErrDylibbundler, name, err)
+			}
+		}
+	}
+	return fmt.Errorf("%w: too many @rpath rounds", ErrRpathLib)
+}
+
+func rpathScanFiles(deps foundation.Deps, res string) []string {
+	var out []string
+	out = append(out, filepath.Join(res, "bin", "remmina"))
+	out = append(out, globMachO(deps, filepath.Join(res, "lib", "remmina", "plugins"))...)
+	out = append(out, globMachO(deps, filepath.Join(res, "lib", "gdk-pixbuf-2.0"))...)
+	matches, err := deps.FS.Glob(filepath.Join(res, "lib", "*"))
+	if err != nil {
+		return out
+	}
+	for _, p := range matches {
+		base := filepath.Base(p)
+		if strings.HasSuffix(base, ".dylib") || strings.HasSuffix(base, ".so") {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func fixLoaderInstallNames(ctx context.Context, deps foundation.Deps, res string) error {
+	bundled, err := bundledLibNames(deps, filepath.Join(res, "lib"))
+	if err != nil {
+		return err
+	}
+	prefix := loaderPathToLib(res, filepath.Join(pixbufLoadersDir(res), "x.so"))
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	for _, pat := range []string{"*.so", "*.dylib"} {
+		files, err := deps.FS.Glob(filepath.Join(pixbufLoadersDir(res), pat))
+		if err != nil {
+			return err
+		}
+		for _, f := range files {
+			if err := rewriteInstallNames(ctx, deps, f, prefix, bundled); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func writeDMG(ctx context.Context, deps foundation.Deps, appDir, dest string) error {

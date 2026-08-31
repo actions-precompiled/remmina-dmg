@@ -111,6 +111,16 @@ func TestRemminaToolbarIconIsSVG(t *testing.T) {
 	}
 }
 
+func TestRpathDepName(t *testing.T) {
+	t.Parallel()
+	if got := rpathDepName("@rpath/librsvg-2.2.dylib"); got != "librsvg-2.2.dylib" {
+		t.Fatalf("rpath: %s", got)
+	}
+	if rpathDepName("@loader_path/../lib/libcairo.2.dylib") != "" {
+		t.Fatal("loader_path is not rpath")
+	}
+}
+
 func TestLoaderPathToLib(t *testing.T) {
 	t.Parallel()
 	res := "/tmp/stage/Remmina.app/Contents/Resources"

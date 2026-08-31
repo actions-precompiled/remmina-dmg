@@ -94,6 +94,9 @@ func smokeOne(ctx context.Context, deps foundation.Deps, artifact string) error 
 	if err := checkIcons(deps, app); err != nil {
 		return err
 	}
+	if err := checkSVGLoader(ctx, deps, app); err != nil {
+		return err
+	}
 	if err := verifyAdHoc(ctx, deps, app); err != nil {
 		return err
 	}
@@ -172,10 +175,52 @@ func checkIcons(deps foundation.Deps, app string) error {
 	if !strings.Contains(s, pixbufLoaderToken) {
 		return fmt.Errorf("%w: token missing", ErrPixbufCache)
 	}
+	if !strings.Contains(strings.ToLower(s), "svg") {
+		return fmt.Errorf("%w: SVG loader did not register", ErrPixbufCache)
+	}
 	for _, n := range []string{"/opt/homebrew/", "/usr/local/opt/", "/usr/local/Cellar/"} {
 		if strings.Contains(s, n) {
 			return fmt.Errorf("%w: still contains %s", ErrPixbufCache, n)
 		}
+	}
+	return nil
+}
+
+func checkSVGLoader(ctx context.Context, deps foundation.Deps, app string) error {
+	res := filepath.Join(app, "Contents", "Resources")
+	if _, err := deps.FS.Stat(filepath.Join(res, "etc", "gtk-3.0", "settings.ini")); err != nil {
+		return fmt.Errorf("%w: gtk-3.0/settings.ini", ErrIconMissing)
+	}
+	rsvg := filepath.Join(res, "lib", "librsvg-2.2.dylib")
+	if _, err := deps.FS.Stat(rsvg); err != nil {
+		return fmt.Errorf("%w: librsvg-2.2.dylib", ErrRpathLib)
+	}
+	var loader string
+	files, err := deps.FS.Glob(filepath.Join(pixbufLoadersDir(res), "*"))
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrPixbufSVGLoader, err)
+	}
+	for _, p := range files {
+		if isSVGLoader(p) {
+			loader = p
+			break
+		}
+	}
+	if loader == "" {
+		return fmt.Errorf("%w", ErrPixbufSVGLoader)
+	}
+	if err := checkNoHomebrewLinks(ctx, deps, loader); err != nil {
+		return err
+	}
+	out, err := deps.Runner.Output(ctx, "otool", "-L", loader)
+	if err != nil {
+		return fmt.Errorf("otool -L %s: %w", filepath.Base(loader), err)
+	}
+	if strings.Contains(out, "@rpath/librsvg") {
+		return fmt.Errorf("%w: %s still uses @rpath/librsvg", ErrRpathLib, filepath.Base(loader))
+	}
+	if !strings.Contains(out, "librsvg") {
+		return fmt.Errorf("%w: %s does not link librsvg", ErrPixbufSVGLoader, filepath.Base(loader))
 	}
 	return nil
 }

@@ -116,6 +116,7 @@ main(int argc, char **argv)
 	}
 
 	prepend_path("XDG_DATA_DIRS", resreal, "share");
+	prepend_path("XDG_CONFIG_DIRS", resreal, "etc");
 	set_pref("GSETTINGS_SCHEMA_DIR", resreal, "share/glib-2.0/schemas");
 	set_pref("GDK_PIXBUF_MODULEDIR", resreal, "lib/gdk-pixbuf-2.0/2.10.0/loaders");
 	write_pixbuf_cache(resreal);

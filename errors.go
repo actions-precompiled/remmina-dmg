@@ -25,4 +25,5 @@ var (
 	ErrIconMissing       = errors.New("required remmina icon missing")
 	ErrPixbufSVGLoader   = errors.New("gdk-pixbuf SVG loader missing")
 	ErrPixbufCache       = errors.New("gdk-pixbuf loaders.cache is not relocatable")
+	ErrRpathLib          = errors.New("could not resolve @rpath dylib")
 )
