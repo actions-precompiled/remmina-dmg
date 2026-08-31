@@ -327,6 +327,7 @@ func writePixbufCache(ctx context.Context, deps foundation.Deps, res, brew strin
 		return err
 	}
 	rewritten := relocatePixbufCache(src, present)
+	rewritten = dropHomebrewCommentLines(rewritten)
 	if !strings.Contains(strings.ToLower(rewritten), "svg") {
 		return fmt.Errorf("%w: SVG loader did not register", ErrPixbufCache)
 	}
@@ -381,6 +382,26 @@ func relocatePixbufCache(src string, present map[string]bool) string {
 	}
 	flush()
 	return strings.Join(out, "\n") + "\n"
+}
+
+func dropHomebrewCommentLines(s string) string {
+	var keep []string
+	for _, line := range strings.Split(s, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			skip := false
+			for _, n := range []string{"/opt/homebrew/", "/usr/local/opt/", "/usr/local/Cellar/"} {
+				if strings.Contains(line, n) {
+					skip = true
+					break
+				}
+			}
+			if skip {
+				continue
+			}
+		}
+		keep = append(keep, line)
+	}
+	return strings.Join(keep, "\n")
 }
 
 func loaderBaseFromPathLine(line string) string {

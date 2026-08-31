@@ -114,15 +114,16 @@ func TestRemminaToolbarIconIsSVG(t *testing.T) {
 func TestRelocatePixbufCache(t *testing.T) {
 	t.Parallel()
 	src := "# header\n" +
+		"# LoaderDir = /opt/homebrew/lib/gdk-pixbuf-2.0/2.10.0/loaders\n" +
 		"\"/opt/homebrew/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-png.so\"\n" +
 		"\"png\" 5 \"gdk-pixbuf\" \"PNG\" \"LGPL\"\n" +
 		"\"/opt/homebrew/Cellar/librsvg/2.62.3/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader_svg.so\"\n" +
 		"\"svg\" 6 \"gdk-pixbuf\" \"Scalable Vector Graphics\" \"LGPL\"\n" +
 		"\"image/svg+xml\" \"\"\n"
-	got := relocatePixbufCache(src, map[string]bool{
+	got := dropHomebrewCommentLines(relocatePixbufCache(src, map[string]bool{
 		"libpixbufloader-png.so": true,
 		"libpixbufloader_svg.so": true,
-	})
+	}))
 	if !strings.Contains(got, pixbufLoaderToken+"/libpixbufloader_svg.so") {
 		t.Fatalf("svg path: %s", got)
 	}
