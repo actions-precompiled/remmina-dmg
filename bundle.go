@@ -34,7 +34,16 @@ func assembleApp(ctx context.Context, deps foundation.Deps, prefix, appDir, brew
 	if err := vendorGTKData(ctx, deps, res, brew); err != nil {
 		return err
 	}
+	if err := checkRemminaIcons(deps, res); err != nil {
+		return err
+	}
+	if err := updateIconCaches(ctx, deps, res); err != nil {
+		return err
+	}
 	if err := bundleDylibs(ctx, deps, res); err != nil {
+		return err
+	}
+	if err := writePixbufCache(ctx, deps, res); err != nil {
 		return err
 	}
 	return compileSchemas(ctx, deps, res)
@@ -95,8 +104,12 @@ func vendorGTKData(ctx context.Context, deps foundation.Deps, res, brew string) 
 		{filepath.Join(brew, "share", "glib-2.0", "schemas"), destSchemas},
 		{filepath.Join(brew, "opt", "gtk+3", "share", "glib-2.0", "schemas"), destSchemas},
 		{filepath.Join(brew, "share", "icons", "Adwaita"), filepath.Join(res, "share", "icons", "Adwaita")},
+		{filepath.Join(brew, "opt", "adwaita-icon-theme", "share", "icons", "Adwaita"), filepath.Join(res, "share", "icons", "Adwaita")},
+		{filepath.Join(brew, "share", "icons", "AdwaitaLegacy"), filepath.Join(res, "share", "icons", "AdwaitaLegacy")},
+		{filepath.Join(brew, "opt", "adwaita-icon-theme-legacy", "share", "icons", "AdwaitaLegacy"), filepath.Join(res, "share", "icons", "AdwaitaLegacy")},
 		{filepath.Join(brew, "share", "icons", "hicolor"), filepath.Join(res, "share", "icons", "hicolor")},
 		{filepath.Join(brew, "lib", "gdk-pixbuf-2.0"), filepath.Join(res, "lib", "gdk-pixbuf-2.0")},
+		{filepath.Join(brew, "opt", "librsvg", "lib", "gdk-pixbuf-2.0"), filepath.Join(res, "lib", "gdk-pixbuf-2.0")},
 		{filepath.Join(brew, "lib", "gio", "modules"), filepath.Join(res, "lib", "gio", "modules")},
 		{filepath.Join(brew, "lib", "girepository-1.0"), filepath.Join(res, "lib", "girepository-1.0")},
 	}
@@ -213,6 +226,91 @@ func compileSchemas(ctx context.Context, deps foundation.Deps, res string) error
 		return fmt.Errorf("%w: gschemas.compiled", ErrSchemaMissing)
 	}
 	return nil
+}
+
+const pixbufLoaderToken = "@REMMINA_LOADERS@"
+
+func remminaSymbolicIconRel() string {
+	return filepath.Join("share", "icons", "hicolor", "scalable", "actions",
+		"org.remmina.Remmina-fullscreen-symbolic.svg")
+}
+
+func pixbufLoadersDir(res string) string {
+	return filepath.Join(res, "lib", "gdk-pixbuf-2.0", "2.10.0", "loaders")
+}
+
+func pixbufCachePath(res string) string {
+	return filepath.Join(res, "lib", "gdk-pixbuf-2.0", "2.10.0", "loaders.cache")
+}
+
+func isSVGLoader(name string) bool {
+	n := strings.ToLower(filepath.Base(name))
+	return strings.Contains(n, "svg") && (strings.HasSuffix(n, ".so") || strings.HasSuffix(n, ".dylib"))
+}
+
+func checkRemminaIcons(deps foundation.Deps, res string) error {
+	p := filepath.Join(res, remminaSymbolicIconRel())
+	if _, err := deps.FS.Stat(p); err != nil {
+		return fmt.Errorf("%w: %s", ErrIconMissing, remminaSymbolicIconRel())
+	}
+	return nil
+}
+
+func updateIconCaches(ctx context.Context, deps foundation.Deps, res string) error {
+	tool := "gtk-update-icon-cache"
+	if _, err := deps.Runner.Output(ctx, "which", tool); err != nil {
+		tool = "gtk3-update-icon-cache"
+	}
+	for _, theme := range []string{"hicolor", "Adwaita", "AdwaitaLegacy"} {
+		dir := filepath.Join(res, "share", "icons", theme)
+		if _, err := deps.FS.Stat(dir); err != nil {
+			continue
+		}
+		if err := deps.Runner.Run(ctx, tool, "-f", "-t", dir); err != nil {
+			return fmt.Errorf("gtk-update-icon-cache %s: %w", theme, err)
+		}
+	}
+	return nil
+}
+
+func writePixbufCache(ctx context.Context, deps foundation.Deps, res string) error {
+	dir := pixbufLoadersDir(res)
+	loaders, err := deps.FS.Glob(filepath.Join(dir, "*.so"))
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrPixbufSVGLoader, err)
+	}
+	var hasSVG bool
+	for _, p := range loaders {
+		if isSVGLoader(p) {
+			hasSVG = true
+			break
+		}
+	}
+	if !hasSVG {
+		return fmt.Errorf("%w: %s", ErrPixbufSVGLoader, dir)
+	}
+	out, err := deps.Runner.Output(ctx, "gdk-pixbuf-query-loaders", loaders...)
+	if err != nil {
+		return fmt.Errorf("%w: gdk-pixbuf-query-loaders: %w", ErrPixbufCache, err)
+	}
+	rewritten := rewritePixbufCacheText(out, dir, loaders)
+	if !strings.Contains(rewritten, pixbufLoaderToken) {
+		return fmt.Errorf("%w: token missing", ErrPixbufCache)
+	}
+	for _, n := range []string{"/opt/homebrew/", "/usr/local/opt/", "/usr/local/Cellar/"} {
+		if strings.Contains(rewritten, n) {
+			return fmt.Errorf("%w: still contains %s", ErrPixbufCache, n)
+		}
+	}
+	return deps.FS.WriteFile(pixbufCachePath(res), []byte(rewritten), 0o644)
+}
+
+func rewritePixbufCacheText(src, loadersDir string, loaders []string) string {
+	s := strings.ReplaceAll(src, loadersDir, pixbufLoaderToken)
+	for _, p := range loaders {
+		s = strings.ReplaceAll(s, p, pixbufLoaderToken+"/"+filepath.Base(p))
+	}
+	return s
 }
 
 func writeDMG(ctx context.Context, deps foundation.Deps, appDir, dest string) error {

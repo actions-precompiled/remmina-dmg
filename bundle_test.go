@@ -79,6 +79,38 @@ func TestRequiredSchemasIncludeFileChooser(t *testing.T) {
 	}
 }
 
+func TestPixbufCacheIsRelocatable(t *testing.T) {
+	t.Parallel()
+	dir := "/tmp/Remmina.app/Contents/Resources/lib/gdk-pixbuf-2.0/2.10.0/loaders"
+	svg := dir + "/libpixbufloader-svg.so"
+	src := "\"" + svg + "\"\n\"png\" 5\n"
+	got := rewritePixbufCacheText(src, dir, []string{svg})
+	if !strings.Contains(got, pixbufLoaderToken+"/libpixbufloader-svg.so") {
+		t.Fatalf("token path: %s", got)
+	}
+	if strings.Contains(got, "/tmp/Remmina.app") {
+		t.Fatalf("absolute path left: %s", got)
+	}
+}
+
+func TestSVGLoaderName(t *testing.T) {
+	t.Parallel()
+	if !isSVGLoader("libpixbufloader-svg.so") || !isSVGLoader("libpixbufloader_svg.so") {
+		t.Fatal("svg loader names")
+	}
+	if isSVGLoader("libpixbufloader-png.so") {
+		t.Fatal("png is not svg")
+	}
+}
+
+func TestRemminaToolbarIconIsSVG(t *testing.T) {
+	t.Parallel()
+	rel := remminaSymbolicIconRel()
+	if !strings.Contains(rel, "org.remmina.Remmina-fullscreen-symbolic.svg") {
+		t.Fatalf("toolbar icons are remmina SVGs: %s", rel)
+	}
+}
+
 func TestLoaderPathToLib(t *testing.T) {
 	t.Parallel()
 	res := "/tmp/stage/Remmina.app/Contents/Resources"

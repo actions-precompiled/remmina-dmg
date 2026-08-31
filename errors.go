@@ -22,4 +22,7 @@ var (
 	ErrBadInstallName    = errors.New("bundled dylib has a non-sibling install name")
 	ErrSchemaMissing     = errors.New("required GSettings schema missing")
 	ErrSchemaCompile     = errors.New("glib-compile-schemas failed")
+	ErrIconMissing       = errors.New("required remmina icon missing")
+	ErrPixbufSVGLoader   = errors.New("gdk-pixbuf SVG loader missing")
+	ErrPixbufCache       = errors.New("gdk-pixbuf loaders.cache is not relocatable")
 )

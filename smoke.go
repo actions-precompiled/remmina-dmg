@@ -91,6 +91,9 @@ func smokeOne(ctx context.Context, deps foundation.Deps, artifact string) error 
 	if err := checkSchemas(deps, app); err != nil {
 		return err
 	}
+	if err := checkIcons(deps, app); err != nil {
+		return err
+	}
 	if err := verifyAdHoc(ctx, deps, app); err != nil {
 		return err
 	}
@@ -140,6 +143,41 @@ func isMissingDylib(err error, out string) bool {
 		}
 	}
 	return false
+}
+
+func checkIcons(deps foundation.Deps, app string) error {
+	res := filepath.Join(app, "Contents", "Resources")
+	if err := checkRemminaIcons(deps, res); err != nil {
+		return err
+	}
+	loaders, err := deps.FS.Glob(filepath.Join(pixbufLoadersDir(res), "*.so"))
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrPixbufSVGLoader, err)
+	}
+	ok := false
+	for _, p := range loaders {
+		if isSVGLoader(p) {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return fmt.Errorf("%w", ErrPixbufSVGLoader)
+	}
+	cache, err := deps.FS.ReadFile(pixbufCachePath(res))
+	if err != nil {
+		return fmt.Errorf("%w: loaders.cache: %w", ErrPixbufCache, err)
+	}
+	s := string(cache)
+	if !strings.Contains(s, pixbufLoaderToken) {
+		return fmt.Errorf("%w: token missing", ErrPixbufCache)
+	}
+	for _, n := range []string{"/opt/homebrew/", "/usr/local/opt/", "/usr/local/Cellar/"} {
+		if strings.Contains(s, n) {
+			return fmt.Errorf("%w: still contains %s", ErrPixbufCache, n)
+		}
+	}
+	return nil
 }
 
 func checkSchemas(deps foundation.Deps, app string) error {

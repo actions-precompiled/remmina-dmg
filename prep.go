@@ -24,6 +24,7 @@ var brewDeps = []string{
 	"adwaita-icon-theme",
 	"hicolor-icon-theme",
 	"gdk-pixbuf",
+	"librsvg",
 	"glib",
 	"dylibbundler",
 }

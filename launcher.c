@@ -25,6 +25,51 @@ set_pref(const char *key, const char *dir, const char *rel)
 }
 
 static void
+write_pixbuf_cache(const char *res)
+{
+	char src[PATH_MAX], loaders[PATH_MAX], dst[PATH_MAX];
+	if (join(src, sizeof(src), res, "lib/gdk-pixbuf-2.0/2.10.0/loaders.cache")) {
+		return;
+	}
+	if (join(loaders, sizeof(loaders), res, "lib/gdk-pixbuf-2.0/2.10.0/loaders")) {
+		return;
+	}
+	const char *tmp = getenv("TMPDIR");
+	if (tmp == NULL || tmp[0] == '\0') {
+		tmp = "/tmp";
+	}
+	if (snprintf(dst, sizeof(dst), "%s/remmina-pixbuf-loaders.cache", tmp) < 0) {
+		return;
+	}
+	FILE *in = fopen(src, "r");
+	if (in == NULL) {
+		return;
+	}
+	FILE *out = fopen(dst, "w");
+	if (out == NULL) {
+		fclose(in);
+		return;
+	}
+	char line[4096];
+	const char *tok = "@REMMINA_LOADERS@";
+	size_t toklen = strlen(tok);
+	while (fgets(line, sizeof(line), in) != NULL) {
+		char *hit = strstr(line, tok);
+		if (hit == NULL) {
+			fputs(line, out);
+			continue;
+		}
+		*hit = '\0';
+		fputs(line, out);
+		fputs(loaders, out);
+		fputs(hit + toklen, out);
+	}
+	fclose(in);
+	fclose(out);
+	setenv("GDK_PIXBUF_MODULE_FILE", dst, 1);
+}
+
+static void
 prepend_path(const char *key, const char *dir, const char *rel)
 {
 	char val[PATH_MAX];
@@ -73,6 +118,7 @@ main(int argc, char **argv)
 	prepend_path("XDG_DATA_DIRS", resreal, "share");
 	set_pref("GSETTINGS_SCHEMA_DIR", resreal, "share/glib-2.0/schemas");
 	set_pref("GDK_PIXBUF_MODULEDIR", resreal, "lib/gdk-pixbuf-2.0/2.10.0/loaders");
+	write_pixbuf_cache(resreal);
 	setenv("GTK_DATA_PREFIX", resreal, 1);
 	setenv("GTK_EXE_PREFIX", resreal, 1);
 	setenv("GTK_PATH", resreal, 1);
