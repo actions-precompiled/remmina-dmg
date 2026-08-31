@@ -110,6 +110,8 @@ func vendorGTKData(ctx context.Context, deps foundation.Deps, res, brew string) 
 		{filepath.Join(brew, "opt", "adwaita-icon-theme", "share", "icons", "Adwaita"), filepath.Join(res, "share", "icons", "Adwaita")},
 		{filepath.Join(brew, "share", "icons", "AdwaitaLegacy"), filepath.Join(res, "share", "icons", "AdwaitaLegacy")},
 		{filepath.Join(brew, "opt", "adwaita-icon-theme-legacy", "share", "icons", "AdwaitaLegacy"), filepath.Join(res, "share", "icons", "AdwaitaLegacy")},
+		{filepath.Join(brew, "share", "themes", "Adwaita"), filepath.Join(res, "share", "themes", "Adwaita")},
+		{filepath.Join(brew, "opt", "gtk+3", "share", "themes", "Adwaita"), filepath.Join(res, "share", "themes", "Adwaita")},
 		{filepath.Join(brew, "share", "icons", "hicolor"), filepath.Join(res, "share", "icons", "hicolor")},
 		{filepath.Join(brew, "lib", "gdk-pixbuf-2.0"), filepath.Join(res, "lib", "gdk-pixbuf-2.0")},
 		{filepath.Join(brew, "lib", "gio", "modules"), filepath.Join(res, "lib", "gio", "modules")},
@@ -282,6 +284,8 @@ func writeGTKSettings(deps foundation.Deps, res string) error {
 	const ini = `[Settings]
 gtk-icon-theme-name=Adwaita
 gtk-theme-name=Adwaita
+gtk-decoration-layout=close,minimize,maximize:
+gtk-dialogs-use-header=0
 `
 	return deps.FS.WriteFile(filepath.Join(dir, "settings.ini"), []byte(ini), 0o644)
 }

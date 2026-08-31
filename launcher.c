@@ -1,5 +1,6 @@
 //go:build ignore
 
+#include <CoreFoundation/CoreFoundation.h>
 #include <limits.h>
 #include <mach-o/dyld.h>
 #include <stdio.h>
@@ -126,6 +127,23 @@ main(int argc, char **argv)
 	prepend_path("GI_TYPELIB_PATH", resreal, "lib/girepository-1.0");
 	set_pref("GIO_MODULE_DIR", resreal, "lib/gio/modules");
 	set_pref("PANGO_LIBDIR", resreal, "lib");
+
+	{
+		CFPropertyListRef appearance = CFPreferencesCopyValue(
+			CFSTR("AppleInterfaceStyle"),
+			kCFPreferencesAnyApplication,
+			kCFPreferencesCurrentUser,
+			kCFPreferencesAnyHost);
+		int dark = 0;
+		if (appearance != NULL) {
+			if (CFGetTypeID(appearance) == CFStringGetTypeID() &&
+			    CFStringCompare((CFStringRef)appearance, CFSTR("Dark"), 0) == kCFCompareEqualTo) {
+				dark = 1;
+			}
+			CFRelease(appearance);
+		}
+		setenv("GTK_THEME", dark ? "Adwaita:dark" : "Adwaita", 1);
+	}
 
 	char bin[PATH_MAX];
 	if (join(bin, sizeof(bin), resreal, "bin/remmina")) {

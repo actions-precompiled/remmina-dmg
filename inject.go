@@ -9,7 +9,7 @@ import (
 	"github.com/actions-precompiled/foundation"
 )
 
-//go:embed inject/remmina_bundle.c inject/remmina_bundle.h
+//go:embed inject/remmina_bundle.c inject/remmina_bundle.h inject/remmina_macos.c inject/remmina_macos.h
 var injectFS embed.FS
 
 const injectMarker = ".apc-bundle-inject"
@@ -22,7 +22,7 @@ func injectBundleSources(deps foundation.Deps, src string) error {
 	}
 
 	srcDir := filepath.Join(src, "src")
-	for _, name := range []string{"remmina_bundle.c", "remmina_bundle.h"} {
+	for _, name := range []string{"remmina_bundle.c", "remmina_bundle.h", "remmina_macos.c", "remmina_macos.h"} {
 		data, err := injectFS.ReadFile("inject/" + name)
 		if err != nil {
 			return fmt.Errorf("%w: embed %s: %w", ErrInject, name, err)
@@ -50,7 +50,7 @@ endif()`,
 	cmake := filepath.Join(srcDir, "CMakeLists.txt")
 	if err := replaceOnce(deps, cmake,
 		"  \"remmina_utils.h\"\n",
-		"  \"remmina_utils.h\"\n  \"remmina_bundle.c\"\n  \"remmina_bundle.h\"\n",
+		"  \"remmina_utils.h\"\n  \"remmina_bundle.c\"\n  \"remmina_bundle.h\"\n  \"remmina_macos.c\"\n  \"remmina_macos.h\"\n",
 	); err != nil {
 		return err
 	}
@@ -61,12 +61,12 @@ endif()`,
 		{
 			filepath.Join(srcDir, "remmina.c"),
 			"#include \"remmina_public.h\"\n",
-			"#include \"remmina_public.h\"\n#include \"remmina_bundle.h\"\n",
+			"#include \"remmina_public.h\"\n#include \"remmina_bundle.h\"\n#include \"remmina_macos.h\"\n",
 		},
 		{
 			filepath.Join(srcDir, "remmina.c"),
-			"REMMINA_RUNTIME_DATADIR G_DIR_SEPARATOR_S \"icons\"",
-			"remmina_runtime_iconsdir()",
+			"REMMINA_RUNTIME_DATADIR G_DIR_SEPARATOR_S \"icons\");",
+			"remmina_runtime_iconsdir());\n	remmina_macos_init();",
 		},
 		{
 			filepath.Join(srcDir, "remmina.c"),
@@ -117,6 +117,21 @@ endif()`,
 			filepath.Join(srcDir, "remmina_pref_dialog.c"),
 			"gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(remmina_pref_dialog->button_term_cs), REMMINA_RUNTIME_TERM_CS_DIR);",
 			"gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(remmina_pref_dialog->button_term_cs), remmina_runtime_term_cs_dir());",
+		},
+		{
+			filepath.Join(srcDir, "remmina_main.c"),
+			"#include \"remmina_main.h\"\n",
+			"#include \"remmina_main.h\"\n#include \"remmina_macos.h\"\n",
+		},
+		{
+			filepath.Join(srcDir, "remmina_main.c"),
+			"remminamain->window = GTK_WINDOW(RM_GET_OBJECT(\"RemminaMain\"));",
+			"remminamain->window = GTK_WINDOW(RM_GET_OBJECT(\"RemminaMain\"));\n	remmina_macos_adapt_main_window(remminamain->window);",
+		},
+		{
+			filepath.Join(srcDir, "remmina_pref.c"),
+			"	if (!keymap || keymap[0] == '\\0')\n		return keyval;",
+			"	if (!keymap || keymap[0] == '\\0') {\n#ifdef __APPLE__\n		if (keyval == GDK_KEY_Meta_L)\n			return GDK_KEY_Super_L;\n		if (keyval == GDK_KEY_Meta_R)\n			return GDK_KEY_Super_R;\n#endif\n		return keyval;\n	}",
 		},
 	}
 	for _, r := range replacements {
