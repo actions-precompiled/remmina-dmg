@@ -37,11 +37,7 @@ func assembleApp(ctx context.Context, deps foundation.Deps, prefix, appDir, brew
 	if err := bundleDylibs(ctx, deps, res); err != nil {
 		return err
 	}
-	if err := compileSchemas(ctx, deps, res); err != nil {
-		return err
-	}
-
-	return signApp(ctx, deps, appDir)
+	return compileSchemas(ctx, deps, res)
 }
 
 const remminaAppPNG = "org.remmina.Remmina.png"

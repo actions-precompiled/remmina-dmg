@@ -84,7 +84,7 @@ func smokeOne(ctx context.Context, deps foundation.Deps, artifact string) error 
 	if err := checkNoHomebrewLinks(ctx, deps, rdp); err != nil {
 		return err
 	}
-	if err := verifyAdHoc(ctx, deps, launcher); err != nil {
+	if err := verifyAdHoc(ctx, deps, app); err != nil {
 		return err
 	}
 	if err := verifyAdHoc(ctx, deps, bin); err != nil {

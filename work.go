@@ -92,6 +92,9 @@ built_at=%s
 	if err := deps.FS.WriteFile(filepath.Join(appDir, "Contents", "Resources", "BUILDINFO.txt"), []byte(info), 0o644); err != nil {
 		return err
 	}
+	if err := signApp(ctx, deps, appDir); err != nil {
+		return err
+	}
 
 	dmg := filepath.Join(req.OutDir, foundation.ArtifactNameExt(meta.Name, artifactVer, target, ".dmg"))
 	if err := writeDMG(ctx, deps, appDir, dmg); err != nil {
