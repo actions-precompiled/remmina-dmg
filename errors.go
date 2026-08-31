@@ -17,4 +17,6 @@ var (
 	ErrSmokeNoArtifacts  = errors.New("smoke: no artifacts")
 	ErrSmokeAppMissing   = errors.New("smoke: Remmina.app missing in DMG")
 	ErrHomebrewLink      = errors.New("smoke: binary still linked to Homebrew")
+	ErrAppIconMissing    = errors.New("app icon source png missing")
+	ErrAppIconICNS       = errors.New("AppIcon.icns missing")
 )

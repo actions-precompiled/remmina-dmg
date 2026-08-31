@@ -66,6 +66,10 @@ func smokeOne(ctx context.Context, deps foundation.Deps, artifact string) error 
 	if _, err := deps.FS.Stat(launcher); err != nil {
 		return fmt.Errorf("%w: %s", ErrSmokeAppMissing, launcher)
 	}
+	icns := filepath.Join(app, "Contents", "Resources", "AppIcon.icns")
+	if _, err := deps.FS.Stat(icns); err != nil {
+		return fmt.Errorf("%w: %s", ErrAppIconICNS, icns)
+	}
 	for _, name := range requiredPlugins {
 		p := filepath.Join(app, "Contents", "Resources", "lib", "remmina", "plugins", name)
 		if _, err := deps.FS.Stat(p); err != nil {

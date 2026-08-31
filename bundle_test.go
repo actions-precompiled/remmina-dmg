@@ -13,6 +13,8 @@ func TestInfoPlistAndLauncher(t *testing.T) {
 		"<string>Remmina</string>",
 		"<string>1.4.43</string>",
 		"CFBundleExecutable",
+		"CFBundleIconFile",
+		"AppIcon",
 	} {
 		if !strings.Contains(plist, want) {
 			t.Fatalf("plist missing %q", want)
@@ -32,6 +34,27 @@ func TestDylibbundlerDoesNotWipeDest(t *testing.T) {
 	for _, a := range dylibbundlerArgs("x", "d", "p") {
 		if a == "-od" {
 			t.Fatal("dylibbundler must not use -od")
+		}
+	}
+}
+
+func TestIconsetSlots(t *testing.T) {
+	t.Parallel()
+	got := iconsetSlots()
+	if len(got) < 9 {
+		t.Fatalf("too few slots: %d", len(got))
+	}
+	want := map[string]bool{
+		"icon_16x16.png": false, "icon_512x512.png": false,
+	}
+	for _, s := range got {
+		if _, ok := want[s.name]; ok {
+			want[s.name] = true
+		}
+	}
+	for name, seen := range want {
+		if !seen {
+			t.Fatalf("missing slot %s", name)
 		}
 	}
 }

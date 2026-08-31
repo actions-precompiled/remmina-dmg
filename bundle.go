@@ -43,6 +43,9 @@ func assembleApp(ctx context.Context, deps foundation.Deps, prefix, appDir, brew
 	if err := deps.FS.WriteFile(filepath.Join(appDir, "Contents", "Info.plist"), []byte(plist), 0o644); err != nil {
 		return err
 	}
+	if err := installAppIcon(ctx, deps, res); err != nil {
+		return err
+	}
 
 	if err := vendorGTKData(ctx, deps, res, brew); err != nil {
 		return err
@@ -60,6 +63,53 @@ func assembleApp(ctx context.Context, deps foundation.Deps, prefix, appDir, brew
 			return fmt.Errorf("codesign: %w", err)
 		}
 	}
+	return nil
+}
+
+const remminaAppPNG = "org.remmina.Remmina.png"
+
+// iconsetSlots maps installed hicolor sizes to iconutil filenames.
+func iconsetSlots() []struct{ size, name string } {
+	return []struct{ size, name string }{
+		{"16", "icon_16x16.png"},
+		{"32", "icon_16x16@2x.png"},
+		{"32", "icon_32x32.png"},
+		{"64", "icon_32x32@2x.png"},
+		{"128", "icon_128x128.png"},
+		{"256", "icon_128x128@2x.png"},
+		{"256", "icon_256x256.png"},
+		{"512", "icon_256x256@2x.png"},
+		{"512", "icon_512x512.png"},
+	}
+}
+
+func installAppIcon(ctx context.Context, deps foundation.Deps, res string) error {
+	hicolor := filepath.Join(res, "share", "icons", "hicolor")
+	iconset := filepath.Join(res, "AppIcon.iconset")
+	deps.RemoveAllLog(iconset, "iconset")
+	if err := deps.FS.MkdirAll(iconset, 0o755); err != nil {
+		return err
+	}
+	for _, slot := range iconsetSlots() {
+		src := filepath.Join(hicolor, slot.size+"x"+slot.size, "apps", remminaAppPNG)
+		if _, err := deps.FS.Stat(src); err != nil {
+			return fmt.Errorf("%w: %s", ErrAppIconMissing, src)
+		}
+		if err := deps.Runner.Run(ctx, "cp", src, filepath.Join(iconset, slot.name)); err != nil {
+			return fmt.Errorf("icon %s: %w", slot.name, err)
+		}
+	}
+	src512 := filepath.Join(hicolor, "512x512", "apps", remminaAppPNG)
+	dst1024 := filepath.Join(iconset, "icon_512x512@2x.png")
+	if err := deps.Runner.Run(ctx, "sips", "-z", "1024", "1024", src512, "--out", dst1024); err != nil {
+		return fmt.Errorf("sips 1024: %w", err)
+	}
+	icns := filepath.Join(res, "AppIcon.icns")
+	if err := deps.Runner.Run(ctx, "iconutil", "-c", "icns", iconset, "-o", icns); err != nil {
+		return fmt.Errorf("iconutil: %w", err)
+	}
+	deps.RemoveAllLog(iconset, "iconset")
+	deps.Logf("app icon: %s", icns)
 	return nil
 }
 
@@ -192,6 +242,8 @@ const infoPlist = `<?xml version="1.0" encoding="UTF-8"?>
 	<string>en</string>
 	<key>CFBundleExecutable</key>
 	<string>Remmina</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>org.remmina.Remmina</string>
 	<key>CFBundleInfoDictionaryVersion</key>
