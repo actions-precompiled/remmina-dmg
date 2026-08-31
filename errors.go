@@ -19,4 +19,5 @@ var (
 	ErrHomebrewLink      = errors.New("smoke: binary still linked to Homebrew")
 	ErrAppIconMissing    = errors.New("app icon source png missing")
 	ErrAppIconICNS       = errors.New("AppIcon.icns missing")
+	ErrBadInstallName    = errors.New("bundled dylib has a non-sibling install name")
 )

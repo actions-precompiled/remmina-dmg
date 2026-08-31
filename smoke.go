@@ -84,6 +84,10 @@ func smokeOne(ctx context.Context, deps foundation.Deps, artifact string) error 
 	if err := checkNoHomebrewLinks(ctx, deps, rdp); err != nil {
 		return err
 	}
+	ssl := filepath.Join(app, "Contents", "Resources", "lib", "libssl.3.dylib")
+	if err := checkLibSiblings(ctx, deps, ssl); err != nil {
+		return err
+	}
 	if err := verifyAdHoc(ctx, deps, app); err != nil {
 		return err
 	}
@@ -133,6 +137,17 @@ func isMissingDylib(err error, out string) bool {
 		}
 	}
 	return false
+}
+
+func checkLibSiblings(ctx context.Context, deps foundation.Deps, lib string) error {
+	out, err := deps.Runner.Output(ctx, "otool", "-L", lib)
+	if err != nil {
+		return fmt.Errorf("otool -L %s: %w", filepath.Base(lib), err)
+	}
+	if libHasBadSiblingPath(out) {
+		return fmt.Errorf("%w: %s\n%s", ErrBadInstallName, filepath.Base(lib), out)
+	}
+	return nil
 }
 
 func checkNoHomebrewLinks(ctx context.Context, deps foundation.Deps, bin string) error {

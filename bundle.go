@@ -129,7 +129,9 @@ func bundleDylibs(ctx context.Context, deps foundation.Deps, res string) error {
 			return fmt.Errorf("%w: %s: %w", ErrDylibbundler, filepath.Base(bin), err)
 		}
 	}
-	return nil
+	// dylibbundler reuses -p when rewriting dest libs. Plugin runs use
+	// @loader_path/../.. and poison libssl→libcrypto into Contents/.
+	return fixSiblingInstallNames(ctx, deps, res)
 }
 
 func dylibbundlerArgs(bin, dest, prefix string) []string {
