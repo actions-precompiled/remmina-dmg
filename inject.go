@@ -120,8 +120,8 @@ endif()`,
 		},
 		{
 			filepath.Join(srcDir, "remmina_main.c"),
-			"#include \"remmina_main.h\"\n",
-			"#include \"remmina_main.h\"\n#include \"remmina_macos.h\"\n",
+			"#include \"remmina_unlock.h\"\n",
+			"#include \"remmina_unlock.h\"\n#include \"remmina_macos.h\"\n",
 		},
 		{
 			filepath.Join(srcDir, "remmina_main.c"),
