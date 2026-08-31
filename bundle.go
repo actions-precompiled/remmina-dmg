@@ -109,7 +109,6 @@ func vendorGTKData(ctx context.Context, deps foundation.Deps, res, brew string) 
 		{filepath.Join(brew, "opt", "adwaita-icon-theme-legacy", "share", "icons", "AdwaitaLegacy"), filepath.Join(res, "share", "icons", "AdwaitaLegacy")},
 		{filepath.Join(brew, "share", "icons", "hicolor"), filepath.Join(res, "share", "icons", "hicolor")},
 		{filepath.Join(brew, "lib", "gdk-pixbuf-2.0"), filepath.Join(res, "lib", "gdk-pixbuf-2.0")},
-		{filepath.Join(brew, "opt", "librsvg", "lib", "gdk-pixbuf-2.0"), filepath.Join(res, "lib", "gdk-pixbuf-2.0")},
 		{filepath.Join(brew, "lib", "gio", "modules"), filepath.Join(res, "lib", "gio", "modules")},
 		{filepath.Join(brew, "lib", "girepository-1.0"), filepath.Join(res, "lib", "girepository-1.0")},
 	}
@@ -144,6 +143,8 @@ func mergeTree(ctx context.Context, deps foundation.Deps, src, dest string) erro
 	if err := deps.Runner.Run(ctx, "cp", mergeTreeArgs(src, dest)...); err != nil {
 		return fmt.Errorf("copy %s: %w", src, err)
 	}
+	// Cellar files are often 444; dylibbundler and icon-cache need write.
+	_ = deps.Runner.Run(ctx, "chmod", "-R", "u+w", dest)
 	return nil
 }
 
