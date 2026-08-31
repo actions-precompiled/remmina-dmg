@@ -3,6 +3,7 @@
 
 #ifdef __APPLE__
 
+#include <stdlib.h>
 #include <CoreFoundation/CoreFoundation.h>
 
 static char macos_observer;
@@ -34,13 +35,20 @@ static gboolean
 macos_apply_appearance(gpointer unused)
 {
 	GtkSettings *settings;
+	GdkScreen *screen;
 
 	(void)unused;
+	/* GTK3 get_theme_name() returns before reading prefer-dark if this is set. */
+	unsetenv("GTK_THEME");
 	settings = gtk_settings_get_default();
 	if (settings != NULL) {
 		g_object_set(settings,
 			     "gtk-application-prefer-dark-theme", macos_prefers_dark(),
 			     NULL);
+	}
+	screen = gdk_screen_get_default();
+	if (screen != NULL) {
+		gtk_style_context_reset_widgets(screen);
 	}
 	return G_SOURCE_REMOVE;
 }
@@ -95,6 +103,8 @@ remmina_macos_adapt_main_window(GtkWindow *win)
 	if (win == NULL) {
 		return;
 	}
+	/* remmina_main_new writes remmina_pref.dark_theme over GtkSettings. */
+	macos_apply_appearance(NULL);
 	hb = gtk_window_get_titlebar(win);
 	if (hb == NULL) {
 		return;

@@ -16,8 +16,8 @@ func TestLauncherLeavesAdwaitaUnlocked(t *testing.T) {
 	if strings.Contains(s, "Adwaita:dark") {
 		t.Fatal("GTK_THEME must not lock Adwaita:dark")
 	}
-	if !strings.Contains(s, `setenv("GTK_THEME", "Adwaita", 1)`) {
-		t.Fatal("expected GTK_THEME=Adwaita")
+	if !strings.Contains(s, `unsetenv("GTK_THEME")`) {
+		t.Fatal("expected unsetenv GTK_THEME so prefer-dark is consulted")
 	}
 }
 

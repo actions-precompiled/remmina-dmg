@@ -127,8 +127,8 @@ main(int argc, char **argv)
 	set_pref("GIO_MODULE_DIR", resreal, "lib/gio/modules");
 	set_pref("PANGO_LIBDIR", resreal, "lib");
 
-	/* No :dark suffix — remmina_macos flips prefer-dark on Appearance changes. */
-	setenv("GTK_THEME", "Adwaita", 1);
+	/* GTK3 ignores gtk-application-prefer-dark-theme when GTK_THEME is set. */
+	unsetenv("GTK_THEME");
 
 	char bin[PATH_MAX];
 	if (join(bin, sizeof(bin), resreal, "bin/remmina")) {
