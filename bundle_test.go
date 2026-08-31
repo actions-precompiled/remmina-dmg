@@ -79,17 +79,17 @@ func TestRequiredSchemasIncludeFileChooser(t *testing.T) {
 	}
 }
 
-func TestPixbufCacheIsRelocatable(t *testing.T) {
+func TestSVGPixbufCacheIsOneModule(t *testing.T) {
 	t.Parallel()
-	dir := "/tmp/Remmina.app/Contents/Resources/lib/gdk-pixbuf-2.0/2.10.0/loaders"
-	svg := dir + "/libpixbufloader-svg.so"
-	src := "\"" + svg + "\"\n\"png\" 5\n"
-	got := rewritePixbufCacheText(src, dir, []string{svg})
-	if !strings.Contains(got, pixbufLoaderToken+"/libpixbufloader-svg.so") {
-		t.Fatalf("token path: %s", got)
+	got := finalizePixbufCache(defaultSVGLoaderBlock("libpixbufloader_svg.so"))
+	if !strings.Contains(got, pixbufLoaderToken+"/libpixbufloader_svg.so") {
+		t.Fatalf("path: %s", got)
 	}
-	if strings.Contains(got, "/tmp/Remmina.app") {
-		t.Fatalf("absolute path left: %s", got)
+	if !strings.HasSuffix(got, "\n\n") {
+		t.Fatal("gdk-pixbuf requires a blank line after the module")
+	}
+	if strings.Count(got, "\n\"") > 6 {
+		t.Fatalf("should be a single svg module: %s", got)
 	}
 }
 
@@ -111,31 +111,19 @@ func TestRemminaToolbarIconIsSVG(t *testing.T) {
 	}
 }
 
-func TestRelocatePixbufCache(t *testing.T) {
+func TestExtractSVGLoaderBlock(t *testing.T) {
 	t.Parallel()
-	src := "# header\n" +
-		"# LoaderDir = /opt/homebrew/lib/gdk-pixbuf-2.0/2.10.0/loaders\n" +
-		"\"/opt/homebrew/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-png.so\"\n" +
-		"\"png\" 5 \"gdk-pixbuf\" \"PNG\" \"LGPL\"\n" +
+	src := "\"/opt/homebrew/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-png.so\"\n" +
+		"\"png\" 5 \"gdk-pixbuf\" \"PNG\" \"LGPL\"\n\n" +
 		"\"/opt/homebrew/Cellar/librsvg/2.62.3/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader_svg.so\"\n" +
 		"\"svg\" 6 \"gdk-pixbuf\" \"Scalable Vector Graphics\" \"LGPL\"\n" +
 		"\"image/svg+xml\" \"\"\n"
-	got := dropHomebrewCommentLines(relocatePixbufCache(src, map[string]bool{
-		"libpixbufloader-png.so": true,
-		"libpixbufloader_svg.so": true,
-	}))
+	got := extractSVGLoaderBlock(src, "libpixbufloader_svg.so")
 	if !strings.Contains(got, pixbufLoaderToken+"/libpixbufloader_svg.so") {
-		t.Fatalf("svg path: %s", got)
+		t.Fatalf("path: %s", got)
 	}
-	if !strings.Contains(got, "image/svg+xml") {
-		t.Fatalf("mime: %s", got)
-	}
-	if strings.Contains(got, "/opt/homebrew") {
-		t.Fatalf("homebrew left: %s", got)
-	}
-	dropped := relocatePixbufCache(src, map[string]bool{"libpixbufloader_svg.so": true})
-	if strings.Contains(dropped, "png") && strings.Contains(dropped, "libpixbufloader-png") {
-		t.Fatalf("dropped png still present: %s", dropped)
+	if strings.Contains(got, "png") {
+		t.Fatalf("png leaked into svg block: %s", got)
 	}
 }
 

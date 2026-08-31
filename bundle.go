@@ -304,42 +304,56 @@ func updateIconCaches(ctx context.Context, deps foundation.Deps, res string) err
 }
 
 func writePixbufCache(ctx context.Context, deps foundation.Deps, res, brew string) error {
-	dir := pixbufLoadersDir(res)
-	present := map[string]bool{}
-	var hasSVG bool
-	for _, pat := range []string{"*.so", "*.dylib"} {
-		files, err := deps.FS.Glob(filepath.Join(dir, pat))
-		if err != nil {
-			return fmt.Errorf("%w: %w", ErrPixbufSVGLoader, err)
-		}
-		for _, p := range files {
-			present[filepath.Base(p)] = true
-			if isSVGLoader(p) {
-				hasSVG = true
-			}
-		}
-	}
-	if !hasSVG {
-		return fmt.Errorf("%w: %s", ErrPixbufSVGLoader, dir)
-	}
-	src, err := readBrewPixbufCache(deps, brew)
+	base, err := preferredSVGLoader(deps, pixbufLoadersDir(res))
 	if err != nil {
 		return err
 	}
-	rewritten := relocatePixbufCache(src, present)
-	rewritten = dropHomebrewCommentLines(rewritten)
-	if !strings.Contains(strings.ToLower(rewritten), "svg") {
-		return fmt.Errorf("%w: SVG loader did not register", ErrPixbufCache)
+	block := defaultSVGLoaderBlock(base)
+	if src, err := readBrewPixbufCache(deps, brew); err == nil {
+		if extracted := extractSVGLoaderBlock(src, base); extracted != "" {
+			block = extracted
+		}
 	}
-	if !strings.Contains(rewritten, pixbufLoaderToken) {
+	cache := finalizePixbufCache(block)
+	if !strings.Contains(cache, pixbufLoaderToken+"/"+base) {
 		return fmt.Errorf("%w: token missing", ErrPixbufCache)
 	}
+	if !strings.Contains(cache, "\n\n") {
+		return fmt.Errorf("%w: module must end with a blank line", ErrPixbufCache)
+	}
 	for _, n := range []string{"/opt/homebrew/", "/usr/local/opt/", "/usr/local/Cellar/"} {
-		if strings.Contains(rewritten, n) {
+		if strings.Contains(cache, n) {
 			return fmt.Errorf("%w: still contains %s", ErrPixbufCache, n)
 		}
 	}
-	return deps.FS.WriteFile(pixbufCachePath(res), []byte(rewritten), 0o644)
+	return deps.FS.WriteFile(pixbufCachePath(res), []byte(cache), 0o644)
+}
+
+func preferredSVGLoader(deps foundation.Deps, dir string) (string, error) {
+	var so, dylib string
+	for _, pat := range []string{"*.so", "*.dylib"} {
+		files, err := deps.FS.Glob(filepath.Join(dir, pat))
+		if err != nil {
+			return "", fmt.Errorf("%w: %w", ErrPixbufSVGLoader, err)
+		}
+		for _, p := range files {
+			if !isSVGLoader(p) {
+				continue
+			}
+			if strings.HasSuffix(p, ".so") {
+				so = filepath.Base(p)
+			} else {
+				dylib = filepath.Base(p)
+			}
+		}
+	}
+	if so != "" {
+		return so, nil
+	}
+	if dylib != "" {
+		return dylib, nil
+	}
+	return "", fmt.Errorf("%w: %s", ErrPixbufSVGLoader, dir)
 }
 
 func readBrewPixbufCache(deps foundation.Deps, brew string) (string, error) {
@@ -355,75 +369,53 @@ func readBrewPixbufCache(deps foundation.Deps, brew string) (string, error) {
 	return "", fmt.Errorf("%w: brew loaders.cache missing", ErrPixbufCache)
 }
 
-func relocatePixbufCache(src string, present map[string]bool) string {
-	var out, cur []string
-	flush := func() {
-		if len(cur) == 0 {
-			return
+func defaultSVGLoaderBlock(base string) string {
+	return fmt.Sprintf("\"%s/%s\"\n"+
+		"\"svg\" 6 \"gdk-pixbuf\" \"Scalable Vector Graphics\" \"LGPL\"\n"+
+		"\"image/svg+xml\" \"image/svg\" \"image/svg+xml-compressed\" \"\"\n"+
+		"\"svg\" \"svgz\" \"svg.gz\" \"\"\n"+
+		"\"<svg\" \"\" 100\n"+
+		"\"<?xml\" \"\" 50\n", pixbufLoaderToken, base)
+}
+
+func extractSVGLoaderBlock(src, loaderBase string) string {
+	var cur []string
+	flush := func() string {
+		if len(cur) < 2 {
+			return ""
 		}
-		base := loaderBaseFromPathLine(cur[0])
-		if base != "" && present[base] {
-			cur[0] = "\"" + pixbufLoaderToken + "/" + base + "\""
-			out = append(out, cur...)
+		if !strings.Contains(strings.ToLower(strings.Join(cur, "\n")), "\"svg\"") {
+			return ""
 		}
-		cur = nil
+		cur[0] = "\"" + pixbufLoaderToken + "/" + loaderBase + "\""
+		return strings.Join(cur, "\n")
 	}
 	for _, line := range strings.Split(src, "\n") {
 		if isLoaderPathLine(line) {
-			flush()
+			if block := flush(); block != "" {
+				return block
+			}
 			cur = []string{line}
 			continue
 		}
 		if len(cur) > 0 {
 			cur = append(cur, line)
-			continue
 		}
-		out = append(out, line)
 	}
-	flush()
-	return strings.Join(out, "\n") + "\n"
+	return flush()
 }
 
-func dropHomebrewCommentLines(s string) string {
-	var keep []string
-	for _, line := range strings.Split(s, "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), "#") {
-			skip := false
-			for _, n := range []string{"/opt/homebrew/", "/usr/local/opt/", "/usr/local/Cellar/"} {
-				if strings.Contains(line, n) {
-					skip = true
-					break
-				}
-			}
-			if skip {
-				continue
-			}
-		}
-		keep = append(keep, line)
-	}
-	return strings.Join(keep, "\n")
-}
-
-func loaderBaseFromPathLine(line string) string {
-	s := strings.TrimSpace(line)
-	s = strings.Trim(s, "\"")
-	if s == "" {
-		return ""
-	}
-	return filepath.Base(s)
+func finalizePixbufCache(block string) string {
+	return strings.TrimRight(block, "\n") + "\n\n"
 }
 
 func isLoaderPathLine(line string) bool {
 	s := strings.TrimSpace(line)
-	return strings.HasPrefix(s, "\"/") || strings.HasPrefix(s, "\"@")
-}
-
-func rewritePixbufCacheText(src, loadersDir string, loaders []string) string {
-	s := strings.ReplaceAll(src, loadersDir, pixbufLoaderToken)
-	for _, p := range loaders {
-		s = strings.ReplaceAll(s, p, pixbufLoaderToken+"/"+filepath.Base(p))
+	if !strings.HasPrefix(s, "\"") {
+		return false
 	}
-	return s
+	inner := strings.Trim(s, "\"")
+	return strings.ContainsAny(inner, "/") && (strings.Contains(inner, ".so") || strings.Contains(inner, ".dylib"))
 }
 
 func rpathDepName(dep string) string {

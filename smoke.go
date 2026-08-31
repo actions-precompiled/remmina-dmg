@@ -178,6 +178,9 @@ func checkIcons(deps foundation.Deps, app string) error {
 	if !strings.Contains(strings.ToLower(s), "svg") {
 		return fmt.Errorf("%w: SVG loader did not register", ErrPixbufCache)
 	}
+	if !strings.Contains(s, "\n\n") {
+		return fmt.Errorf("%w: module must end with a blank line", ErrPixbufCache)
+	}
 	for _, n := range []string{"/opt/homebrew/", "/usr/local/opt/", "/usr/local/Cellar/"} {
 		if strings.Contains(s, n) {
 			return fmt.Errorf("%w: still contains %s", ErrPixbufCache, n)
