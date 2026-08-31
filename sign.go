@@ -51,7 +51,12 @@ func signApp(ctx context.Context, deps foundation.Deps, appDir string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("sign: no mach-o files in %s", appDir)
 	}
-	ent := filepath.Join(appDir, "Contents", "entitlements.plist")
+	tmp, err := deps.FS.TempDir("", "remmina-entitlements-")
+	if err != nil {
+		return err
+	}
+	defer deps.RemoveAllLog(tmp, "entitlements")
+	ent := filepath.Join(tmp, "entitlements.plist")
 	data, err := bundleFS.ReadFile("entitlements.plist")
 	if err != nil {
 		return fmt.Errorf("embed entitlements: %w", err)
@@ -59,7 +64,6 @@ func signApp(ctx context.Context, deps foundation.Deps, appDir string) error {
 	if err := deps.FS.WriteFile(ent, data, 0o644); err != nil {
 		return err
 	}
-	defer func() { _ = deps.FS.RemoveAll(ent) }()
 
 	// After exec the real remmina binary is the process; it needs the
 	// disable-library-validation entitlement, not just the wrapper.
