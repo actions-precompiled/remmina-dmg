@@ -88,6 +88,9 @@ func smokeOne(ctx context.Context, deps foundation.Deps, artifact string) error 
 	if err := checkLibSiblings(ctx, deps, ssl); err != nil {
 		return err
 	}
+	if err := checkSchemas(deps, app); err != nil {
+		return err
+	}
 	if err := verifyAdHoc(ctx, deps, app); err != nil {
 		return err
 	}
@@ -137,6 +140,19 @@ func isMissingDylib(err error, out string) bool {
 		}
 	}
 	return false
+}
+
+func checkSchemas(deps foundation.Deps, app string) error {
+	dir := filepath.Join(app, "Contents", "Resources", "share", "glib-2.0", "schemas")
+	for _, name := range requiredSchemaFiles() {
+		if _, err := deps.FS.Stat(filepath.Join(dir, name)); err != nil {
+			return fmt.Errorf("%w: %s", ErrSchemaMissing, name)
+		}
+	}
+	if _, err := deps.FS.Stat(filepath.Join(dir, "gschemas.compiled")); err != nil {
+		return fmt.Errorf("%w: gschemas.compiled", ErrSchemaMissing)
+	}
+	return nil
 }
 
 func checkLibSiblings(ctx context.Context, deps foundation.Deps, lib string) error {

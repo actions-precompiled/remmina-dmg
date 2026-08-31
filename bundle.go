@@ -88,8 +88,12 @@ func installAppIcon(ctx context.Context, deps foundation.Deps, res string) error
 }
 
 func vendorGTKData(ctx context.Context, deps foundation.Deps, res, brew string) error {
+	destSchemas := filepath.Join(res, "share", "glib-2.0", "schemas")
 	copies := [][2]string{
-		{filepath.Join(brew, "share", "glib-2.0", "schemas"), filepath.Join(res, "share", "glib-2.0", "schemas")},
+		// Homebrew schemas are Cellar symlinks. Follow them and merge
+		// into dest; cp -a of the directory nests or leaves dangling links.
+		{filepath.Join(brew, "share", "glib-2.0", "schemas"), destSchemas},
+		{filepath.Join(brew, "opt", "gtk+3", "share", "glib-2.0", "schemas"), destSchemas},
 		{filepath.Join(brew, "share", "icons", "Adwaita"), filepath.Join(res, "share", "icons", "Adwaita")},
 		{filepath.Join(brew, "share", "icons", "hicolor"), filepath.Join(res, "share", "icons", "hicolor")},
 		{filepath.Join(brew, "lib", "gdk-pixbuf-2.0"), filepath.Join(res, "lib", "gdk-pixbuf-2.0")},
@@ -97,16 +101,35 @@ func vendorGTKData(ctx context.Context, deps foundation.Deps, res, brew string) 
 		{filepath.Join(brew, "lib", "girepository-1.0"), filepath.Join(res, "lib", "girepository-1.0")},
 	}
 	for _, pair := range copies {
-		if _, err := deps.FS.Stat(pair[0]); err != nil {
-			deps.Logf("vendor: skip missing %s", pair[0])
-			continue
-		}
-		if err := deps.FS.MkdirAll(filepath.Dir(pair[1]), 0o755); err != nil {
+		if err := mergeTree(ctx, deps, pair[0], pair[1]); err != nil {
 			return err
 		}
-		if err := deps.Runner.Run(ctx, "cp", "-a", pair[0], pair[1]); err != nil {
-			return fmt.Errorf("copy %s: %w", pair[0], err)
-		}
+	}
+	return nil
+}
+
+func requiredSchemaFiles() []string {
+	return []string{
+		"org.gtk.Settings.FileChooser.gschema.xml",
+	}
+}
+
+func mergeTreeArgs(src, dest string) []string {
+	// -RL follows Cellar keg symlinks. src/. copies contents into dest
+	// instead of nesting dest/<basename> when dest already exists.
+	return []string{"-RL", src + "/.", dest}
+}
+
+func mergeTree(ctx context.Context, deps foundation.Deps, src, dest string) error {
+	if _, err := deps.FS.Stat(src); err != nil {
+		deps.Logf("vendor: skip missing %s", src)
+		return nil
+	}
+	if err := deps.FS.MkdirAll(dest, 0o755); err != nil {
+		return err
+	}
+	if err := deps.Runner.Run(ctx, "cp", mergeTreeArgs(src, dest)...); err != nil {
+		return fmt.Errorf("copy %s: %w", src, err)
 	}
 	return nil
 }
@@ -174,10 +197,20 @@ func globMachO(deps foundation.Deps, root string) []string {
 func compileSchemas(ctx context.Context, deps foundation.Deps, res string) error {
 	dir := filepath.Join(res, "share", "glib-2.0", "schemas")
 	if _, err := deps.FS.Stat(dir); err != nil {
-		return nil
+		return fmt.Errorf("%w: %s", ErrSchemaMissing, dir)
+	}
+	for _, name := range requiredSchemaFiles() {
+		p := filepath.Join(dir, name)
+		if _, err := deps.FS.Stat(p); err != nil {
+			return fmt.Errorf("%w: %s", ErrSchemaMissing, name)
+		}
 	}
 	if err := deps.Runner.Run(ctx, "glib-compile-schemas", dir); err != nil {
-		deps.Logf("glib-compile-schemas: %v (continuing)", err)
+		return fmt.Errorf("%w: %w", ErrSchemaCompile, err)
+	}
+	compiled := filepath.Join(dir, "gschemas.compiled")
+	if _, err := deps.FS.Stat(compiled); err != nil {
+		return fmt.Errorf("%w: gschemas.compiled", ErrSchemaMissing)
 	}
 	return nil
 }

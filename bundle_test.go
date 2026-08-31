@@ -56,6 +56,29 @@ func TestIconsetSlots(t *testing.T) {
 	}
 }
 
+func TestMergeTreeCopiesContents(t *testing.T) {
+	t.Parallel()
+	src := "/opt/homebrew/share/glib-2.0/schemas"
+	dest := "/tmp/Remmina.app/Contents/Resources/share/glib-2.0/schemas"
+	args := mergeTreeArgs(src, dest)
+	if len(args) != 3 || args[0] != "-RL" || args[1] != src+"/." || args[2] != dest {
+		t.Fatalf("merge args: %v", args)
+	}
+	for _, a := range args {
+		if a == "-a" || a == "-R" {
+			t.Fatal("cp -a/-R of the directory itself nests when dest exists")
+		}
+	}
+}
+
+func TestRequiredSchemasIncludeFileChooser(t *testing.T) {
+	t.Parallel()
+	got := strings.Join(requiredSchemaFiles(), " ")
+	if !strings.Contains(got, "org.gtk.Settings.FileChooser.gschema.xml") {
+		t.Fatal("GTK FileChooser schema required; missing it SIGTRAPs on connect")
+	}
+}
+
 func TestLoaderPathToLib(t *testing.T) {
 	t.Parallel()
 	res := "/tmp/stage/Remmina.app/Contents/Resources"

@@ -20,4 +20,6 @@ var (
 	ErrAppIconMissing    = errors.New("app icon source png missing")
 	ErrAppIconICNS       = errors.New("AppIcon.icns missing")
 	ErrBadInstallName    = errors.New("bundled dylib has a non-sibling install name")
+	ErrSchemaMissing     = errors.New("required GSettings schema missing")
+	ErrSchemaCompile     = errors.New("glib-compile-schemas failed")
 )
