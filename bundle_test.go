@@ -149,6 +149,20 @@ func TestRpathDepName(t *testing.T) {
 	}
 }
 
+func TestMissingBundleDep(t *testing.T) {
+	t.Parallel()
+	have := map[string]bool{"libcairo.2.dylib": true}
+	if got := missingBundleDep("@loader_path/../lib/librsvg-2.2.dylib", have); got != "librsvg-2.2.dylib" {
+		t.Fatalf("missing rsvg: %s", got)
+	}
+	if missingBundleDep("@loader_path/../lib/libcairo.2.dylib", have) != "" {
+		t.Fatal("cairo already bundled")
+	}
+	if missingBundleDep("/usr/lib/libSystem.B.dylib", have) != "" {
+		t.Fatal("system lib")
+	}
+}
+
 func TestLoaderPathToLib(t *testing.T) {
 	t.Parallel()
 	res := "/tmp/stage/Remmina.app/Contents/Resources"

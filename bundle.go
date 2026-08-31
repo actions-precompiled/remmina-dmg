@@ -434,6 +434,24 @@ func rpathDepName(dep string) string {
 	return ""
 }
 
+func missingBundleDep(dep string, bundled map[string]bool) string {
+	if strings.HasPrefix(dep, "/usr/lib/") || strings.HasPrefix(dep, "/System/") {
+		return ""
+	}
+	name := filepath.Base(dep)
+	if name == "" || bundled[name] {
+		return ""
+	}
+	if !strings.HasSuffix(name, ".dylib") && !strings.HasSuffix(name, ".so") {
+		return ""
+	}
+	if strings.HasPrefix(dep, "@rpath/") || strings.HasPrefix(dep, "@loader_path/") ||
+		strings.Contains(dep, "/opt/homebrew/") || strings.Contains(dep, "/usr/local/") {
+		return name
+	}
+	return ""
+}
+
 func findBrewDylib(deps foundation.Deps, brew, name string) string {
 	for _, p := range []string{
 		filepath.Join(brew, "lib", name),
@@ -465,14 +483,17 @@ func vendorMissingRpathLibs(ctx context.Context, deps foundation.Deps, res, brew
 			}
 			_, depsList := parseOtoolL(out)
 			for _, dep := range depsList {
-				name := rpathDepName(dep)
-				if name == "" || bundled[name] {
+				name := missingBundleDep(dep, bundled)
+				if name == "" {
 					continue
 				}
 				needed[name] = true
 			}
 		}
 		if len(needed) == 0 {
+			if matches, _ := deps.FS.Glob(filepath.Join(lib, "librsvg*.dylib")); len(matches) == 0 {
+				return fmt.Errorf("%w: librsvg*.dylib", ErrRpathLib)
+			}
 			return nil
 		}
 		for name := range needed {

@@ -191,9 +191,9 @@ func checkSVGLoader(ctx context.Context, deps foundation.Deps, app string) error
 	if _, err := deps.FS.Stat(filepath.Join(res, "etc", "gtk-3.0", "settings.ini")); err != nil {
 		return fmt.Errorf("%w: gtk-3.0/settings.ini", ErrIconMissing)
 	}
-	rsvg := filepath.Join(res, "lib", "librsvg-2.2.dylib")
-	if _, err := deps.FS.Stat(rsvg); err != nil {
-		return fmt.Errorf("%w: librsvg-2.2.dylib", ErrRpathLib)
+	rsvg, err := deps.FS.Glob(filepath.Join(res, "lib", "librsvg*.dylib"))
+	if err != nil || len(rsvg) == 0 {
+		return fmt.Errorf("%w: librsvg*.dylib", ErrRpathLib)
 	}
 	var loader string
 	files, err := deps.FS.Glob(filepath.Join(pixbufLoadersDir(res), "*"))
