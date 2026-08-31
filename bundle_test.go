@@ -26,6 +26,16 @@ func TestInfoPlistAndLauncher(t *testing.T) {
 	}
 }
 
+func TestDylibbundlerDoesNotWipeDest(t *testing.T) {
+	t.Parallel()
+	// Regression: -od deletes lib/remmina/plugins before plugins are bundled.
+	for _, a := range dylibbundlerArgs("x", "d", "p") {
+		if a == "-od" {
+			t.Fatal("dylibbundler must not use -od")
+		}
+	}
+}
+
 func TestLoaderPathToLib(t *testing.T) {
 	t.Parallel()
 	res := "/tmp/stage/Remmina.app/Contents/Resources"

@@ -39,6 +39,12 @@ func TestInjectBundleSources(t *testing.T) {
 	if err := os.MkdirAll(srcDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(root, "CMakeLists.txt"), []byte(`if(NOT FREEBSD)
+  set(CMAKE_INSTALL_RPATH "\$ORIGIN/../${CMAKE_INSTALL_LIBDIR}:\$ORIGIN/..")
+endif()
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	files := map[string]string{
 		"CMakeLists.txt":           "  \"remmina_utils.c\"\n  \"remmina_utils.h\"\n  \"remmina_widget_pool.c\"\n",
 		"remmina.c":                "#include \"remmina_public.h\"\nfoo\ngtk_icon_theme_append_search_path(gtk_icon_theme_get_default(),\n  REMMINA_RUNTIME_DATADIR G_DIR_SEPARATOR_S \"icons\");\nbar\nbindtextdomain(GETTEXT_PACKAGE, REMMINA_RUNTIME_LOCALEDIR);\n",
@@ -66,6 +72,13 @@ func TestInjectBundleSources(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(srcDir, "remmina_bundle.c")); err != nil {
 		t.Fatal(err)
+	}
+	rootGot, err := os.ReadFile(filepath.Join(root, "CMakeLists.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(rootGot), `set(CMAKE_INSTALL_RPATH "@loader_path/../lib")`) {
+		t.Fatalf("root CMakeLists RPATH not patched:\n%s", rootGot)
 	}
 	if err := injectBundleSources(deps, root); err != nil {
 		t.Fatal(err)

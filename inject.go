@@ -32,6 +32,21 @@ func injectBundleSources(deps foundation.Deps, src string) error {
 		}
 	}
 
+	rootCMake := filepath.Join(src, "CMakeLists.txt")
+	if err := replaceOnce(deps, rootCMake,
+		`if(NOT FREEBSD)
+  set(CMAKE_INSTALL_RPATH "\$ORIGIN/../${CMAKE_INSTALL_LIBDIR}:\$ORIGIN/..")
+endif()`,
+		`if(APPLE)
+  set(CMAKE_INSTALL_RPATH "@loader_path/../lib")
+  set(CMAKE_BUILD_RPATH_USE_ORIGIN FALSE)
+elseif(NOT FREEBSD)
+  set(CMAKE_INSTALL_RPATH "\$ORIGIN/../${CMAKE_INSTALL_LIBDIR}:\$ORIGIN/..")
+endif()`,
+	); err != nil {
+		return err
+	}
+
 	cmake := filepath.Join(srcDir, "CMakeLists.txt")
 	if err := replaceOnce(deps, cmake,
 		"  \"remmina_utils.h\"\n",

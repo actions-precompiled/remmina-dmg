@@ -99,17 +99,19 @@ func bundleDylibs(ctx context.Context, deps foundation.Deps, res string) error {
 	for _, bin := range bins {
 		prefix := loaderPathToLib(res, bin)
 		deps.Logf("dylibbundler %s (%s)", bin, prefix)
-		err := deps.Runner.Run(ctx, "dylibbundler",
-			"-od", "-b",
-			"-x", bin,
-			"-d", lib,
-			"-p", prefix,
-		)
+		args := dylibbundlerArgs(bin, lib, prefix)
+		err := deps.Runner.Run(ctx, "dylibbundler", args...)
 		if err != nil {
 			return fmt.Errorf("%w: %s: %w", ErrDylibbundler, filepath.Base(bin), err)
 		}
 	}
 	return nil
+}
+
+func dylibbundlerArgs(bin, dest, prefix string) []string {
+	// -of overwrites dest files. Do not pass -od: that wipes dest (and
+	// remmina plugins living under lib/remmina/plugins).
+	return []string{"-of", "-cd", "-b", "-ns", "-x", bin, "-d", dest, "-p", prefix}
 }
 
 func loaderPathToLib(res, bin string) string {
