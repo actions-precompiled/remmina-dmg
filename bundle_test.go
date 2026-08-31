@@ -111,6 +111,26 @@ func TestRemminaToolbarIconIsSVG(t *testing.T) {
 	}
 }
 
+func TestExtractSVGLoaderBlock(t *testing.T) {
+	t.Parallel()
+	src := "# header\n" +
+		"\"/opt/homebrew/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-png.so\"\n" +
+		"\"png\" 5 \"gdk-pixbuf\" \"PNG\" \"LGPL\"\n" +
+		"\"/opt/homebrew/Cellar/librsvg/2.62.3/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader_svg.so\"\n" +
+		"\"svg\" 6 \"gdk-pixbuf\" \"Scalable Vector Graphics\" \"LGPL\"\n" +
+		"\"image/svg+xml\" \"\"\n"
+	got := extractSVGLoaderBlock(src, "libpixbufloader_svg.so")
+	if !strings.Contains(got, pixbufLoaderToken+"/libpixbufloader_svg.so") {
+		t.Fatalf("path: %s", got)
+	}
+	if !strings.Contains(got, "image/svg+xml") {
+		t.Fatalf("mime: %s", got)
+	}
+	if strings.Contains(got, "/opt/homebrew") {
+		t.Fatalf("homebrew left: %s", got)
+	}
+}
+
 func TestRpathDepName(t *testing.T) {
 	t.Parallel()
 	if got := rpathDepName("@rpath/librsvg-2.2.dylib"); got != "librsvg-2.2.dylib" {
