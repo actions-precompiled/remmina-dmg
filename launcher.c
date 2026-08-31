@@ -1,3 +1,5 @@
+//go:build ignore
+
 #include <limits.h>
 #include <mach-o/dyld.h>
 #include <stdio.h>
