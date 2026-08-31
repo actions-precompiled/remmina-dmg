@@ -305,33 +305,28 @@ func updateIconCaches(ctx context.Context, deps foundation.Deps, res string) err
 
 func writePixbufCache(ctx context.Context, deps foundation.Deps, res, brew string) error {
 	dir := pixbufLoadersDir(res)
-	loaders, err := deps.FS.Glob(filepath.Join(dir, "*.so"))
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrPixbufSVGLoader, err)
-	}
-	var rest, svg []string
-	for _, p := range loaders {
-		if isSVGLoader(p) {
-			svg = append(svg, p)
-			continue
+	present := map[string]bool{}
+	var hasSVG bool
+	for _, pat := range []string{"*.so", "*.dylib"} {
+		files, err := deps.FS.Glob(filepath.Join(dir, pat))
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrPixbufSVGLoader, err)
 		}
-		rest = append(rest, p)
+		for _, p := range files {
+			present[filepath.Base(p)] = true
+			if isSVGLoader(p) {
+				hasSVG = true
+			}
+		}
 	}
-	if len(svg) == 0 {
+	if !hasSVG {
 		return fmt.Errorf("%w: %s", ErrPixbufSVGLoader, dir)
 	}
-	// Host query-loaders segfaults if it dlopens the bundled SVG
-	// loader (it already has a different libgdk_pixbuf in-process).
-	out, err := deps.Runner.Output(ctx, "gdk-pixbuf-query-loaders", rest...)
-	if err != nil {
-		return fmt.Errorf("%w: gdk-pixbuf-query-loaders: %w", ErrPixbufCache, err)
-	}
-	rewritten := rewritePixbufCacheText(out, dir, rest)
-	block, err := svgCacheBlockFromBrew(deps, brew, filepath.Base(svg[0]))
+	src, err := readBrewPixbufCache(deps, brew)
 	if err != nil {
 		return err
 	}
-	rewritten += block
+	rewritten := relocatePixbufCache(src, present)
 	if !strings.Contains(strings.ToLower(rewritten), "svg") {
 		return fmt.Errorf("%w: SVG loader did not register", ErrPixbufCache)
 	}
@@ -346,48 +341,55 @@ func writePixbufCache(ctx context.Context, deps foundation.Deps, res, brew strin
 	return deps.FS.WriteFile(pixbufCachePath(res), []byte(rewritten), 0o644)
 }
 
-func svgCacheBlockFromBrew(deps foundation.Deps, brew, loaderBase string) (string, error) {
+func readBrewPixbufCache(deps foundation.Deps, brew string) (string, error) {
 	for _, p := range []string{
 		filepath.Join(brew, "lib", "gdk-pixbuf-2.0", "2.10.0", "loaders.cache"),
 		filepath.Join(brew, "opt", "gdk-pixbuf", "lib", "gdk-pixbuf-2.0", "2.10.0", "loaders.cache"),
 	} {
 		data, err := deps.FS.ReadFile(p)
-		if err != nil {
-			continue
-		}
-		if block := extractSVGLoaderBlock(string(data), loaderBase); block != "" {
-			return block, nil
+		if err == nil && len(data) > 0 {
+			return string(data), nil
 		}
 	}
-	return "", fmt.Errorf("%w: no svg entry in brew loaders.cache", ErrPixbufCache)
+	return "", fmt.Errorf("%w: brew loaders.cache missing", ErrPixbufCache)
 }
 
-func extractSVGLoaderBlock(src, loaderBase string) string {
-	var cur []string
-	flush := func() string {
+func relocatePixbufCache(src string, present map[string]bool) string {
+	var out, cur []string
+	flush := func() {
 		if len(cur) == 0 {
-			return ""
+			return
 		}
-		text := strings.ToLower(strings.Join(cur, "\n"))
-		if !strings.Contains(text, "svg") || !strings.Contains(text, "gdk-pixbuf") {
-			return ""
+		base := loaderBaseFromPathLine(cur[0])
+		if base != "" && present[base] {
+			cur[0] = "\"" + pixbufLoaderToken + "/" + base + "\""
+			out = append(out, cur...)
 		}
-		cur[0] = "\"" + pixbufLoaderToken + "/" + loaderBase + "\""
-		return strings.Join(cur, "\n") + "\n"
+		cur = nil
 	}
 	for _, line := range strings.Split(src, "\n") {
 		if isLoaderPathLine(line) {
-			if block := flush(); block != "" {
-				return block
-			}
+			flush()
 			cur = []string{line}
 			continue
 		}
 		if len(cur) > 0 {
 			cur = append(cur, line)
+			continue
 		}
+		out = append(out, line)
 	}
-	return flush()
+	flush()
+	return strings.Join(out, "\n") + "\n"
+}
+
+func loaderBaseFromPathLine(line string) string {
+	s := strings.TrimSpace(line)
+	s = strings.Trim(s, "\"")
+	if s == "" {
+		return ""
+	}
+	return filepath.Base(s)
 }
 
 func isLoaderPathLine(line string) bool {
