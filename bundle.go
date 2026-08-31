@@ -452,6 +452,34 @@ func missingBundleDep(dep string, bundled map[string]bool) string {
 	return ""
 }
 
+func ensureBrewLib(ctx context.Context, deps foundation.Deps, res, brew, pattern string) error {
+	lib := filepath.Join(res, "lib")
+	if matches, _ := deps.FS.Glob(filepath.Join(lib, pattern)); len(matches) > 0 {
+		return nil
+	}
+	src := ""
+	for _, p := range []string{
+		filepath.Join(brew, "opt", "librsvg", "lib", pattern),
+		filepath.Join(brew, "lib", pattern),
+	} {
+		found, err := deps.FS.Glob(p)
+		if err == nil && len(found) > 0 {
+			src = found[0]
+			break
+		}
+	}
+	if src == "" {
+		return fmt.Errorf("%w: %s", ErrRpathLib, pattern)
+	}
+	dest := filepath.Join(lib, filepath.Base(src))
+	deps.Logf("vendor %s from %s", filepath.Base(src), src)
+	if err := deps.Runner.Run(ctx, "cp", src, dest); err != nil {
+		return fmt.Errorf("copy %s: %w", filepath.Base(src), err)
+	}
+	_ = deps.Runner.Run(ctx, "chmod", "u+w", dest)
+	return deps.Runner.Run(ctx, "dylibbundler", dylibbundlerArgs(dest, lib, "@loader_path/")...)
+}
+
 func findBrewDylib(deps foundation.Deps, brew, name string) string {
 	for _, p := range []string{
 		filepath.Join(brew, "lib", name),
@@ -470,6 +498,9 @@ func findBrewDylib(deps foundation.Deps, brew, name string) string {
 
 func vendorMissingRpathLibs(ctx context.Context, deps foundation.Deps, res, brew string) error {
 	lib := filepath.Join(res, "lib")
+	if err := ensureBrewLib(ctx, deps, res, brew, "librsvg*.dylib"); err != nil {
+		return err
+	}
 	for i := 0; i < 8; i++ {
 		bundled, err := bundledLibNames(deps, lib)
 		if err != nil {
@@ -481,8 +512,8 @@ func vendorMissingRpathLibs(ctx context.Context, deps foundation.Deps, res, brew
 			if err != nil {
 				return fmt.Errorf("otool -L %s: %w", filepath.Base(f), err)
 			}
-			_, depsList := parseOtoolL(out)
-			for _, dep := range depsList {
+			id, depsList := parseOtoolL(out)
+			for _, dep := range append([]string{id}, depsList...) {
 				name := missingBundleDep(dep, bundled)
 				if name == "" {
 					continue
@@ -491,9 +522,6 @@ func vendorMissingRpathLibs(ctx context.Context, deps foundation.Deps, res, brew
 			}
 		}
 		if len(needed) == 0 {
-			if matches, _ := deps.FS.Glob(filepath.Join(lib, "librsvg*.dylib")); len(matches) == 0 {
-				return fmt.Errorf("%w: librsvg*.dylib", ErrRpathLib)
-			}
 			return nil
 		}
 		for name := range needed {
