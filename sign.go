@@ -24,14 +24,25 @@ func signApp(ctx context.Context, deps foundation.Deps, appDir string) error {
 	}
 	var files []string
 	err := filepath.WalkDir(appDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
 			return err
+		}
+		if d.IsDir() || d.Type()&os.ModeSymlink != 0 {
+			return nil
 		}
 		ok, err := fileIsMachO(path)
-		if err != nil || !ok {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
 			return err
 		}
-		files = append(files, path)
+		if ok {
+			files = append(files, path)
+		}
 		return nil
 	})
 	if err != nil {
