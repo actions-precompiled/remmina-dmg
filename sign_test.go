@@ -6,18 +6,25 @@ import (
 	"testing"
 )
 
-func TestLauncherLeavesAdwaitaUnlocked(t *testing.T) {
+func TestAdwaitaVariantComesFromGTKTheme(t *testing.T) {
 	t.Parallel()
-	data, err := os.ReadFile("launcher.c")
+	launch, err := os.ReadFile("launcher.c")
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := string(data)
-	if strings.Contains(s, "Adwaita:dark") {
-		t.Fatal("GTK_THEME must not lock Adwaita:dark")
+	if !strings.Contains(string(launch), `setenv("GTK_THEME", dark ? "Adwaita:dark" : "Adwaita", 1)`) {
+		t.Fatal("expected launcher to set GTK_THEME from appearance")
 	}
-	if !strings.Contains(s, `unsetenv("GTK_THEME")`) {
-		t.Fatal("expected unsetenv GTK_THEME so prefer-dark is consulted")
+	mac, err := os.ReadFile("inject/remmina_macos.c")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(mac)
+	if !strings.Contains(s, `setenv("GTK_THEME", dark ? "Adwaita:dark" : "Adwaita", 1)`) {
+		t.Fatal("expected remmina_macos to update GTK_THEME at runtime")
+	}
+	if strings.Contains(s, `unsetenv("GTK_THEME")`) {
+		t.Fatal("unsetenv GTK_THEME drops the dark variant")
 	}
 }
 

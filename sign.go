@@ -131,7 +131,7 @@ func compileLauncher(ctx context.Context, deps foundation.Deps, dest string) err
 	if err := deps.FS.WriteFile(cfile, src, 0o644); err != nil {
 		return err
 	}
-	if err := deps.Runner.Run(ctx, "cc", "-O2", "-Wl,-dead_strip", "-o", dest, cfile); err != nil {
+	if err := deps.Runner.Run(ctx, "cc", "-O2", "-Wl,-dead_strip", "-framework", "CoreFoundation", "-o", dest, cfile); err != nil {
 		return fmt.Errorf("cc launcher: %w", err)
 	}
 	return os.Chmod(dest, 0o755)

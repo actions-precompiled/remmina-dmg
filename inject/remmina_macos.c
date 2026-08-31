@@ -36,15 +36,22 @@ macos_apply_appearance(gpointer unused)
 {
 	GtkSettings *settings;
 	GdkScreen *screen;
+	gboolean dark;
 
 	(void)unused;
-	/* GTK3 get_theme_name() returns before reading prefer-dark if this is set. */
-	unsetenv("GTK_THEME");
+	dark = macos_prefers_dark();
+	/*
+	 * GTK3 only loads gtk-dark.css from GTK_THEME=name:dark.
+	 * prefer-dark is ignored while GTK_THEME is set, and Remmina keeps
+	 * writing remmina_pref.dark_theme (off by default) over that property.
+	 */
+	setenv("GTK_THEME", dark ? "Adwaita:dark" : "Adwaita", 1);
 	settings = gtk_settings_get_default();
 	if (settings != NULL) {
 		g_object_set(settings,
-			     "gtk-application-prefer-dark-theme", macos_prefers_dark(),
+			     "gtk-application-prefer-dark-theme", dark,
 			     NULL);
+		g_object_notify(G_OBJECT(settings), "gtk-theme-name");
 	}
 	screen = gdk_screen_get_default();
 	if (screen != NULL) {
