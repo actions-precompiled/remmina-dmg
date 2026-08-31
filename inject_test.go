@@ -52,7 +52,7 @@ endif()
 		"remmina_public.c":         "#include \"config.h\"\ngchar *ui_path = g_strconcat(REMMINA_RUNTIME_UIDIR, G_DIR_SEPARATOR_S, filename, NULL);\n",
 		"remmina_external_tools.c": "#include \"remmina_external_tools.h\"\nstrcpy(dirname, REMMINA_RUNTIME_EXTERNAL_TOOLS_DIR);\ng_snprintf(launcher, MAX_PATH_LEN, \"%s/launcher.sh\", REMMINA_RUNTIME_EXTERNAL_TOOLS_DIR);\n",
 		"remmina_pref_dialog.c":    "#include \"remmina_public.h\"\ngtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(remmina_pref_dialog->button_term_cs), REMMINA_RUNTIME_TERM_CS_DIR);\n",
-		"remmina_main.c":           "#include \"remmina_unlock.h\"\nremminamain->window = GTK_WINDOW(RM_GET_OBJECT(\"RemminaMain\"));\n",
+		"remmina_main.c":           "#include \"remmina_unlock.h\"\nremminamain->builder = remmina_public_gtk_builder_new_from_resource(\"/org/remmina/Remmina/src/../data/ui/remmina_main.glade\");\n	remminamain->window = GTK_WINDOW(RM_GET_OBJECT(\"RemminaMain\"));\n",
 		"remmina_pref.c":           "	if (!keymap || keymap[0] == '\\0')\n		return keyval;\n",
 	}
 	for name, body := range files {

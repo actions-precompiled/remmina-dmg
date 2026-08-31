@@ -125,8 +125,8 @@ endif()`,
 		},
 		{
 			filepath.Join(srcDir, "remmina_main.c"),
-			"remminamain->window = GTK_WINDOW(RM_GET_OBJECT(\"RemminaMain\"));",
-			"remminamain->window = GTK_WINDOW(RM_GET_OBJECT(\"RemminaMain\"));\n	remmina_macos_adapt_main_window(remminamain->window);",
+			"remminamain->builder = remmina_public_gtk_builder_new_from_resource(\"/org/remmina/Remmina/src/../data/ui/remmina_main.glade\");\n	remminamain->window = GTK_WINDOW(RM_GET_OBJECT(\"RemminaMain\"));",
+			"remminamain->builder = remmina_public_gtk_builder_new_from_resource(\"/org/remmina/Remmina/src/../data/ui/remmina_main.glade\");\n	remminamain->window = GTK_WINDOW(RM_GET_OBJECT(\"RemminaMain\"));\n	remmina_macos_adapt_main_window(remminamain->window);",
 		},
 		{
 			filepath.Join(srcDir, "remmina_pref.c"),
