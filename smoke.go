@@ -194,9 +194,6 @@ func checkSVGLoader(ctx context.Context, deps foundation.Deps, app string) error
 	if _, err := deps.FS.Stat(filepath.Join(res, "etc", "gtk-3.0", "settings.ini")); err != nil {
 		return fmt.Errorf("%w: gtk-3.0/settings.ini", ErrIconMissing)
 	}
-	if _, err := deps.FS.Stat(filepath.Join(res, "share", "themes", "Adwaita", "gtk-3.0", "gtk.css")); err != nil {
-		return fmt.Errorf("%w: Adwaita gtk.css", ErrIconMissing)
-	}
 	rsvg, err := deps.FS.Glob(filepath.Join(res, "lib", "librsvg*.dylib"))
 	if err != nil || len(rsvg) == 0 {
 		return fmt.Errorf("%w: librsvg*.dylib", ErrRpathLib)
